@@ -28,7 +28,6 @@
 #include "FeStructs.h"
 /*#include "globalVars.h"*/
 
-
 #ifdef _WIN32
 extern int MYGENMMD(int *neq, int *fxadj, int *adjncy, int *winvp,
 			     int *wperm, int *delta, int *fchild, int *parent,
