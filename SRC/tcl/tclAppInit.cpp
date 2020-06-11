@@ -107,6 +107,8 @@ main(int argc, char **argv)
      * #define and uses Tcl_AppInit if it doesn't exist.
      */
 
+    /***/
+
 #ifndef TCL_LOCAL_APPINIT
 #define TCL_LOCAL_APPINIT Tcl_AppInit    
 #endif
