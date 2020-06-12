@@ -44,202 +44,249 @@ static int nextTag = 0;
 
 int OPS_HomogeneousBC()
 {
-    Domain* theDomain = OPS_GetDomain();
-    if(theDomain == 0) {
-	opserr<<"WARNING: domain is not defined\n";
-	return -1;
-    }
-    if(OPS_GetNumRemainingInputArgs() < 1) {
-	opserr<<"insufficient number of args\n";
-	return -1;
-    }
 
-    // get tag and constr values
-    int num = OPS_GetNumRemainingInputArgs();
-    ID vals(num);
-    if(OPS_GetIntInput(&num, &vals(0)) < 0) {
-	opserr << "WARNING invalid int values\n";
-	return -1;
-    }
-
-    // get node
-    Node* theNode = theDomain->getNode(vals(0));
-    if(theNode == 0) {
-	opserr<<"ERROR node "<<vals(0)<<" is not defined\n";
-	return -1;
-    }
-    int ndf = theNode->getNumberDOF();
-
-    // create homogeneous constraints
-    if(vals.Size()-1 < ndf) {
-	opserr<<"WARNING: invalid # of constraint values\n";
-	return -1;
-    }
-    for(int i=0; i<ndf; i++) {
-	if(vals(i+1) == 0) continue;
-	SP_Constraint* theSP = new SP_Constraint(vals(0), i, 0.0, true);
-	if(theSP == 0) {
-	    opserr<<"WARNING: failed to create SP\n";
-	    return -1;
-	}
-	if(theDomain->addSP_Constraint(theSP) == false) {
-	    opserr<<"WARNING: failed to add SP to domain\n";
-	    delete theSP;
-	    return -1;
-	}
-    }
+#ifdef _SAP
 
     return 0;
+
+#else
+
+	Domain* theDomain = OPS_GetDomain();
+	if (theDomain == 0) {
+		opserr << "WARNING: domain is not defined\n";
+		return -1;
+}
+	if (OPS_GetNumRemainingInputArgs() < 1) {
+		opserr << "insufficient number of args\n";
+		return -1;
+	}
+
+	// get tag and constr values
+	int num = OPS_GetNumRemainingInputArgs();
+	ID vals(num);
+	if (OPS_GetIntInput(&num, &vals(0)) < 0) {
+		opserr << "WARNING invalid int values\n";
+		return -1;
+	}
+
+	// get node
+	Node* theNode = theDomain->getNode(vals(0));
+	if (theNode == 0) {
+		opserr << "ERROR node " << vals(0) << " is not defined\n";
+		return -1;
+	}
+	int ndf = theNode->getNumberDOF();
+
+	// create homogeneous constraints
+	if (vals.Size() - 1 < ndf) {
+		opserr << "WARNING: invalid # of constraint values\n";
+		return -1;
+	}
+	for (int i = 0; i < ndf; i++) {
+		if (vals(i + 1) == 0) continue;
+		SP_Constraint* theSP = new SP_Constraint(vals(0), i, 0.0, true);
+		if (theSP == 0) {
+			opserr << "WARNING: failed to create SP\n";
+			return -1;
+		}
+		if (theDomain->addSP_Constraint(theSP) == false) {
+			opserr << "WARNING: failed to add SP to domain\n";
+			delete theSP;
+			return -1;
+		}
+	}
+
+	return 0;
+
+#endif // SAP
+
+    
 }
 
 int OPS_HomogeneousBC_X()
 {
-    Domain* theDomain = OPS_GetDomain();
-    if(theDomain == 0) {
-	opserr<<"WARNING: domain is not defined\n";
-	return -1;
-    }
-    if(OPS_GetNumRemainingInputArgs() < 1) {
-	opserr<<"insufficient number of args\n";
-	return -1;
-    }
+#ifdef _SAP
 
-    // get the xCrd of nodes to be constrained
-    double xLoc;
-    int numdata = 1;
-    if (OPS_GetDoubleInput(&numdata, &xLoc) < 0) {
-	opserr << "WARNING invalid xLoc\n";
-	return -1;
-    }
+	return 0;
 
-    // read in the fixities
-    ID fixity(0,3);
-    while (OPS_GetNumRemainingInputArgs() > 0) {
-	int fix;
-	if (OPS_GetIntInput(&numdata, &fix) < 0) {
-	    // back one arg
-	    OPS_ResetCurrentInputArg(-1);
-	    break;
-	}
-	fixity[fixity.Size()] = fix;
-    }
+#else
 
-    // set the tolerance, the allowable difference in nodal coordinate and
-    // what the value user specified to see if node is constrained or not
-    double tol = 1e-10;
-    if (OPS_GetNumRemainingInputArgs() > 1) {
-	const char* arg = OPS_GetString();
-	if (strcmp(arg, "-tol") == 0) {
-	    if (OPS_GetDoubleInput(&numdata, &tol) < 0) {
-		opserr << "WARNING invalid tol\n";
+	Domain* theDomain = OPS_GetDomain();
+	if (theDomain == 0) {
+		opserr << "WARNING: domain is not defined\n";
 		return -1;
-	    }
 	}
-    }
+	if (OPS_GetNumRemainingInputArgs() < 1) {
+		opserr << "insufficient number of args\n";
+		return -1;
+	}
 
-    theDomain->addSP_Constraint(0, xLoc, fixity, tol);
+	// get the xCrd of nodes to be constrained
+	double xLoc;
+	int numdata = 1;
+	if (OPS_GetDoubleInput(&numdata, &xLoc) < 0) {
+		opserr << "WARNING invalid xLoc\n";
+		return -1;
+	}
 
-    return 0;
+	// read in the fixities
+	ID fixity(0, 3);
+	while (OPS_GetNumRemainingInputArgs() > 0) {
+		int fix;
+		if (OPS_GetIntInput(&numdata, &fix) < 0) {
+			// back one arg
+			OPS_ResetCurrentInputArg(-1);
+			break;
+		}
+		fixity[fixity.Size()] = fix;
+	}
+
+	// set the tolerance, the allowable difference in nodal coordinate and
+	// what the value user specified to see if node is constrained or not
+	double tol = 1e-10;
+	if (OPS_GetNumRemainingInputArgs() > 1) {
+		const char* arg = OPS_GetString();
+		if (strcmp(arg, "-tol") == 0) {
+			if (OPS_GetDoubleInput(&numdata, &tol) < 0) {
+				opserr << "WARNING invalid tol\n";
+				return -1;
+			}
+		}
+	}
+
+	theDomain->addSP_Constraint(0, xLoc, fixity, tol);
+
+	return 0;
+
+#endif // _SAP
+
+
+
+    
 }
 
 int OPS_HomogeneousBC_Y()
 {
-    Domain* theDomain = OPS_GetDomain();
-    if(theDomain == 0) {
-	opserr<<"WARNING: domain is not defined\n";
-	return -1;
-    }
-    if(OPS_GetNumRemainingInputArgs() < 1) {
-	opserr<<"insufficient number of args\n";
-	return -1;
-    }
 
-    // get the yCrd of nodes to be constrained
-    double yLoc;
-    int numdata = 1;
-    if (OPS_GetDoubleInput(&numdata, &yLoc) < 0) {
-	opserr << "WARNING invalid yLoc\n";
-	return -1;
-    }
+#ifdef _SAP
 
-    // read in the fixities
-    ID fixity(0,3);
-    while (OPS_GetNumRemainingInputArgs() > 0) {
-	int fix;
-	if (OPS_GetIntInput(&numdata, &fix) < 0) {
-	    // back one arg
-	    OPS_ResetCurrentInputArg(-1);
-	    break;
-	}
-	fixity[fixity.Size()] = fix;
-    }
+	return 0;
 
-    // set the tolerance, the allowable difference in nodal coordinate and
-    // what the value user specified to see if node is constrained or not
-    double tol = 1e-10;
-    if (OPS_GetNumRemainingInputArgs() > 1) {
-	const char* arg = OPS_GetString();
-	if (strcmp(arg, "-tol") == 0) {
-	    if (OPS_GetDoubleInput(&numdata, &tol) < 0) {
-		opserr << "WARNING invalid tol\n";
+#else
+
+	Domain* theDomain = OPS_GetDomain();
+	if (theDomain == 0) {
+		opserr << "WARNING: domain is not defined\n";
 		return -1;
-	    }
 	}
-    }
+	if (OPS_GetNumRemainingInputArgs() < 1) {
+		opserr << "insufficient number of args\n";
+		return -1;
+	}
 
-    theDomain->addSP_Constraint(1, yLoc, fixity, tol);
+	// get the yCrd of nodes to be constrained
+	double yLoc;
+	int numdata = 1;
+	if (OPS_GetDoubleInput(&numdata, &yLoc) < 0) {
+		opserr << "WARNING invalid yLoc\n";
+		return -1;
+	}
 
-    return 0;
+	// read in the fixities
+	ID fixity(0, 3);
+	while (OPS_GetNumRemainingInputArgs() > 0) {
+		int fix;
+		if (OPS_GetIntInput(&numdata, &fix) < 0) {
+			// back one arg
+			OPS_ResetCurrentInputArg(-1);
+			break;
+		}
+		fixity[fixity.Size()] = fix;
+	}
+
+	// set the tolerance, the allowable difference in nodal coordinate and
+	// what the value user specified to see if node is constrained or not
+	double tol = 1e-10;
+	if (OPS_GetNumRemainingInputArgs() > 1) {
+		const char* arg = OPS_GetString();
+		if (strcmp(arg, "-tol") == 0) {
+			if (OPS_GetDoubleInput(&numdata, &tol) < 0) {
+				opserr << "WARNING invalid tol\n";
+				return -1;
+			}
+		}
+	}
+
+	theDomain->addSP_Constraint(1, yLoc, fixity, tol);
+
+	return 0;
+
+#endif // _SAP
+
+
+   
 }
 
 int OPS_HomogeneousBC_Z()
 {
-    Domain* theDomain = OPS_GetDomain();
-    if(theDomain == 0) {
-	opserr<<"WARNING: domain is not defined\n";
-	return -1;
-    }
-    if(OPS_GetNumRemainingInputArgs() < 1) {
-	opserr<<"insufficient number of args\n";
-	return -1;
-    }
 
-    // get the zCrd of nodes to be constrained
-    double zLoc;
-    int numdata = 1;
-    if (OPS_GetDoubleInput(&numdata, &zLoc) < 0) {
-	opserr << "WARNING invalid zLoc\n";
-	return -1;
-    }
+#ifdef _SAP
 
-    // read in the fixities
-    ID fixity(0,3);
-    while (OPS_GetNumRemainingInputArgs() > 0) {
-	int fix;
-	if (OPS_GetIntInput(&numdata, &fix) < 0) {
-	    // back one arg
-	    OPS_ResetCurrentInputArg(-1);
-	    break;
-	}
-	fixity[fixity.Size()] = fix;
-    }
+	return 0;
 
-    // set the tolerance, the allowable difference in nodal coordinate and
-    // what the value user specified to see if node is constrained or not
-    double tol = 1e-10;
-    if (OPS_GetNumRemainingInputArgs() > 1) {
-	const char* arg = OPS_GetString();
-	if (strcmp(arg, "-tol") == 0) {
-	    if (OPS_GetDoubleInput(&numdata, &tol) < 0) {
-		opserr << "WARNING invalid tol\n";
+#else
+
+	Domain* theDomain = OPS_GetDomain();
+	if (theDomain == 0) {
+		opserr << "WARNING: domain is not defined\n";
 		return -1;
-	    }
 	}
-    }
+	if (OPS_GetNumRemainingInputArgs() < 1) {
+		opserr << "insufficient number of args\n";
+		return -1;
+	}
 
-    theDomain->addSP_Constraint(2, zLoc, fixity, tol);
+	// get the zCrd of nodes to be constrained
+	double zLoc;
+	int numdata = 1;
+	if (OPS_GetDoubleInput(&numdata, &zLoc) < 0) {
+		opserr << "WARNING invalid zLoc\n";
+		return -1;
+	}
 
-    return 0;
+	// read in the fixities
+	ID fixity(0, 3);
+	while (OPS_GetNumRemainingInputArgs() > 0) {
+		int fix;
+		if (OPS_GetIntInput(&numdata, &fix) < 0) {
+			// back one arg
+			OPS_ResetCurrentInputArg(-1);
+			break;
+		}
+		fixity[fixity.Size()] = fix;
+	}
+
+	// set the tolerance, the allowable difference in nodal coordinate and
+	// what the value user specified to see if node is constrained or not
+	double tol = 1e-10;
+	if (OPS_GetNumRemainingInputArgs() > 1) {
+		const char* arg = OPS_GetString();
+		if (strcmp(arg, "-tol") == 0) {
+			if (OPS_GetDoubleInput(&numdata, &tol) < 0) {
+				opserr << "WARNING invalid tol\n";
+				return -1;
+			}
+		}
+	}
+
+	theDomain->addSP_Constraint(2, zLoc, fixity, tol);
+
+	return 0;
+
+#endif // _SAP
+
+
+   
 }
 
 // 2 little procedures needed for parallel processing all due to fact that SP's need 

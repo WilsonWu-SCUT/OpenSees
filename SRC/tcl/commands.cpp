@@ -796,12 +796,15 @@ int OpenSeesAppInit(Tcl_Interp *interp) {
   }
 
   theSimulationInfoPtr = &simulationInfo;
-    
+
+#ifdef _SAP
+#else
 #ifndef _LINUX  
-    opserr.setFloatField(SCIENTIFIC);
-    opserr.setFloatField(FIXEDD);
+  opserr.setFloatField(SCIENTIFIC);
+  opserr.setFloatField(FIXEDD);
 #endif
-	
+#endif // _SAP
+    
     //Tcl_CreateObjCommand(interp, "interp", Tcl_InterpOpenSeesObjCmd, NULL, NULL);
 	
 	Tcl_CreateCommand(interp, "recorderValue", &OPS_recorderValue,
@@ -1941,84 +1944,89 @@ printModel(ClientData clientData, Tcl_Interp *interp, int argc, TCL_Char **argv)
   int currentArg = 1;
   int res = 0;
 
+#ifdef _SAP
+#else
   int flag = OPS_PRINT_CURRENTSTATE;
-  
+
   FileStream outputFile;
-  OPS_Stream *output = &opserr;
+  OPS_Stream* output = &opserr;
   bool done = false;
 
   // if just 'print' then print out the entire domain
   if (argc == currentArg) {
-    opserr << theDomain;
-    return TCL_OK;
-  }    
+	  opserr << theDomain;
+	  return TCL_OK;
+  }
 
-  while(done == false) {
-    // if 'print ele i j k..' print out some elements
-    if ((strcmp(argv[currentArg],"-ele") == 0) || (strcmp(argv[currentArg],"ele") == 0)) {
-      currentArg++;
-      res = printElement(clientData, interp, argc-currentArg, argv+currentArg, *output);    
-      done = true;
-    }
-    // if 'print node i j k ..' print out some nodes
-    else if ((strcmp(argv[currentArg],"-node") == 0) || (strcmp(argv[currentArg],"node") == 0)) {
-      currentArg++;      
-      res = printNode(clientData, interp, argc-currentArg, argv+currentArg, *output);
-      done = true;
-    }
-  
-    // if 'print integrator flag' print out the integrator
-    else if ((strcmp(argv[currentArg],"integrator") == 0) || 
-	     (strcmp(argv[currentArg],"-integrator") == 0)) {
-      currentArg++;
-      res = printIntegrator(clientData, interp, argc-currentArg, argv+currentArg, *output);  
-      done = true;
-    }
+  while (done == false) {
+	  // if 'print ele i j k..' print out some elements
+	  if ((strcmp(argv[currentArg], "-ele") == 0) || (strcmp(argv[currentArg], "ele") == 0)) {
+		  currentArg++;
+		  res = printElement(clientData, interp, argc - currentArg, argv + currentArg, *output);
+		  done = true;
+	  }
+	  // if 'print node i j k ..' print out some nodes
+	  else if ((strcmp(argv[currentArg], "-node") == 0) || (strcmp(argv[currentArg], "node") == 0)) {
+		  currentArg++;
+		  res = printNode(clientData, interp, argc - currentArg, argv + currentArg, *output);
+		  done = true;
+	  }
 
-    // if 'print algorithm flag' print out the algorithm
-    else if ((strcmp(argv[currentArg],"algorithm") == 0) || 
-	     (strcmp(argv[currentArg],"-algorithm") == 0)) {
-      currentArg++;
-      res = printAlgorithm(clientData, interp, argc-currentArg, argv+currentArg, *output);    
-      done = true;
-    }
+	  // if 'print integrator flag' print out the integrator
+	  else if ((strcmp(argv[currentArg], "integrator") == 0) ||
+		  (strcmp(argv[currentArg], "-integrator") == 0)) {
+		  currentArg++;
+		  res = printIntegrator(clientData, interp, argc - currentArg, argv + currentArg, *output);
+		  done = true;
+	  }
 
-    else if ((strcmp(argv[currentArg],"-JSON") == 0)) {
-      currentArg++;
-      flag = OPS_PRINT_PRINTMODEL_JSON;
-    }
+	  // if 'print algorithm flag' print out the algorithm
+	  else if ((strcmp(argv[currentArg], "algorithm") == 0) ||
+		  (strcmp(argv[currentArg], "-algorithm") == 0)) {
+		  currentArg++;
+		  res = printAlgorithm(clientData, interp, argc - currentArg, argv + currentArg, *output);
+		  done = true;
+	  }
 
-    else {
+	  else if ((strcmp(argv[currentArg], "-JSON") == 0)) {
+		  currentArg++;
+		  flag = OPS_PRINT_PRINTMODEL_JSON;
+	  }
 
-      if ((strcmp(argv[currentArg],"file") == 0) || 
-	  (strcmp(argv[currentArg],"-file") == 0)) 
-	currentArg++;
-	
-      openMode mode = APPEND;
-      if (flag == OPS_PRINT_PRINTMODEL_JSON)
-          mode = OVERWRITE;
-      if (outputFile.setFile(argv[currentArg], mode) != 0) {
-          opserr << "print <filename> .. - failed to open file: " << argv[currentArg] << endln;
-          return TCL_ERROR;
-      }
-      currentArg++;
+	  else {
 
-      // if just 'print <filename>' then print out the entire domain to eof
-      if (argc == currentArg) {
-          if (flag == OPS_PRINT_PRINTMODEL_JSON)
-              simulationInfo.Print(outputFile, flag);
-          
-          theDomain.Print(outputFile, flag);
-          return TCL_OK;
-      }
+		  if ((strcmp(argv[currentArg], "file") == 0) ||
+			  (strcmp(argv[currentArg], "-file") == 0))
+			  currentArg++;
 
-      output = &outputFile;
+		  openMode mode = APPEND;
+		  if (flag == OPS_PRINT_PRINTMODEL_JSON)
+			  mode = OVERWRITE;
+		  if (outputFile.setFile(argv[currentArg], mode) != 0) {
+			  opserr << "print <filename> .. - failed to open file: " << argv[currentArg] << endln;
+			  return TCL_ERROR;
+		  }
+		  currentArg++;
 
-    }
+		  // if just 'print <filename>' then print out the entire domain to eof
+		  if (argc == currentArg) {
+			  if (flag == OPS_PRINT_PRINTMODEL_JSON)
+				  simulationInfo.Print(outputFile, flag);
+
+			  theDomain.Print(outputFile, flag);
+			  return TCL_OK;
+		  }
+
+		  output = &outputFile;
+
+	  }
   }
 
   // close the output file
   outputFile.close();
+#endif // _SAP
+
+
   return res;
 }
 
@@ -2218,37 +2226,40 @@ printA(ClientData clientData, Tcl_Interp *interp, int argc, TCL_Char **argv)
 {
   int res = 0;
 
+#ifdef _SAP
+#else
   FileStream outputFile;
-  OPS_Stream *output = &opserr;
+  OPS_Stream* output = &opserr;
 
   int currentArg = 1;
 
   if (argc > 2) {
-    if ((strcmp(argv[currentArg],"file") == 0) || 
-	(strcmp(argv[currentArg],"-file") == 0)) {
-      currentArg++;
-      
-      if (outputFile.setFile(argv[currentArg]) != 0) {
-	opserr << "print <filename> .. - failed to open file: " << argv[currentArg] << endln;
-	return TCL_ERROR;
-      }
-      output = &outputFile;
-    }
+	  if ((strcmp(argv[currentArg], "file") == 0) ||
+		  (strcmp(argv[currentArg], "-file") == 0)) {
+		  currentArg++;
+
+		  if (outputFile.setFile(argv[currentArg]) != 0) {
+			  opserr << "print <filename> .. - failed to open file: " << argv[currentArg] << endln;
+			  return TCL_ERROR;
+		  }
+		  output = &outputFile;
+	  }
   }
   if (theSOE != 0) {
-    if (theStaticIntegrator != 0)
-      theStaticIntegrator->formTangent();
-    else if (theTransientIntegrator != 0)
-      theTransientIntegrator->formTangent(0);
-      
-    const Matrix *A = theSOE->getA();
-    if (A != 0) {
-      *output << *A;
-    }
+	  if (theStaticIntegrator != 0)
+		  theStaticIntegrator->formTangent();
+	  else if (theTransientIntegrator != 0)
+		  theTransientIntegrator->formTangent(0);
+
+	  const Matrix* A = theSOE->getA();
+	  if (A != 0) {
+		  *output << *A;
+	  }
   }
-  
+
   // close the output file
   outputFile.close();
+#endif // _SAP
   
   return res;
 }
@@ -2258,36 +2269,39 @@ printB(ClientData clientData, Tcl_Interp *interp, int argc, TCL_Char **argv)
 {
   int res = 0;
 
+#ifdef _SAP
+#else
   FileStream outputFile;
-  OPS_Stream *output = &opserr;
+  OPS_Stream* output = &opserr;
   //  bool done = false;
 
   int currentArg = 1;
 
   if (argc > 2) {
-    if ((strcmp(argv[currentArg],"file") == 0) || 
-	(strcmp(argv[currentArg],"-file") == 0)) {
-      currentArg++;
-      
-      if (outputFile.setFile(argv[currentArg]) != 0) {
-	opserr << "print <filename> .. - failed to open file: " << argv[currentArg] << endln;
-	return TCL_ERROR;
-      }
-      output = &outputFile;
-    }
+	  if ((strcmp(argv[currentArg], "file") == 0) ||
+		  (strcmp(argv[currentArg], "-file") == 0)) {
+		  currentArg++;
+
+		  if (outputFile.setFile(argv[currentArg]) != 0) {
+			  opserr << "print <filename> .. - failed to open file: " << argv[currentArg] << endln;
+			  return TCL_ERROR;
+		  }
+		  output = &outputFile;
+	  }
   }
   if (theSOE != 0) {
-    if (theStaticIntegrator != 0)
-      theStaticIntegrator->formTangent();
-    else if (theTransientIntegrator != 0)
-      theTransientIntegrator->formTangent(0);
-      
-    const Vector &b = theSOE->getB();
-    *output << b;
+	  if (theStaticIntegrator != 0)
+		  theStaticIntegrator->formTangent();
+	  else if (theTransientIntegrator != 0)
+		  theTransientIntegrator->formTangent(0);
+
+	  const Vector& b = theSOE->getB();
+	  *output << b;
   }
-  
+
   // close the output file
   outputFile.close();
+#endif // _SAP
   
   return res;
 }
@@ -8239,27 +8253,30 @@ int
 logFile(ClientData clientData, Tcl_Interp *interp, int argc, TCL_Char **argv)
 {
 
-  if (argc < 2) { 
-    opserr << "WARNING logFile fileName? - no filename supplied\n";
-    return TCL_ERROR;
-  }
-  openMode mode = OVERWRITE;
-  bool echo = true;
+#ifdef _SAP
+#else
+	if (argc < 2) {
+		opserr << "WARNING logFile fileName? - no filename supplied\n";
+		return TCL_ERROR;
+}
+	openMode mode = OVERWRITE;
+	bool echo = true;
 
-  int cArg = 2;
-  while (cArg < argc) {
-    if (strcmp(argv[cArg],"-append") == 0) 
-      mode = APPEND;
-    if (strcmp(argv[cArg],"-noEcho") == 0) 
-      echo = false;
-    cArg++;
-  }
+	int cArg = 2;
+	while (cArg < argc) {
+		if (strcmp(argv[cArg], "-append") == 0)
+			mode = APPEND;
+		if (strcmp(argv[cArg], "-noEcho") == 0)
+			echo = false;
+		cArg++;
+	}
 
-  if (opserr.setFile(argv[1], mode, echo) < 0) 
-    opserr << "WARNING logFile " << argv[1] << " failed to set the file\n";
+	if (opserr.setFile(argv[1], mode, echo) < 0)
+		opserr << "WARNING logFile " << argv[1] << " failed to set the file\n";
 
-  const char *pwd = getInterpPWD(interp);  
-  simulationInfo.addOutputFile(argv[1], pwd);
+	const char* pwd = getInterpPWD(interp);
+	simulationInfo.addOutputFile(argv[1], pwd);
+#endif // _SAP
 
   return TCL_OK;
 }
@@ -8269,16 +8286,19 @@ int
 setPrecision(ClientData clientData, Tcl_Interp *interp, int argc, TCL_Char **argv)
 {
 
-  if (argc < 2) { 
-    opserr << "WARNING setPrecision precision? - no precision value supplied\n";
-    return TCL_ERROR;
-  }
-  int precision;
-  if (Tcl_GetInt(interp, argv[1], &precision) != TCL_OK) {
-    opserr << "WARNING setPrecision precision? - error reading precision value supplied\n";
-    return TCL_ERROR;
-  }
-  opserr.setPrecision(precision);
+#ifdef _SAP
+#else
+	if (argc < 2) {
+		opserr << "WARNING setPrecision precision? - no precision value supplied\n";
+		return TCL_ERROR;
+}
+	int precision;
+	if (Tcl_GetInt(interp, argv[1], &precision) != TCL_OK) {
+		opserr << "WARNING setPrecision precision? - error reading precision value supplied\n";
+		return TCL_ERROR;
+	}
+	opserr.setPrecision(precision);
+#endif // _SAP
 
   return TCL_OK;
 }
@@ -9588,8 +9608,10 @@ printModelGID(ClientData clientData, Tcl_Interp *interp, int argc, TCL_Char **ar
 	int eleRange = 0;
 	int i = 2;
 
-    FileStream outputFile;
-    OPS_Stream *output = &opserr;
+#ifdef _SAP
+#else
+	FileStream outputFile;
+	OPS_Stream* output = &opserr;
 
 	if (argc < 2) {
 		opserr << "WARNING printGID fileName? - no filename supplied\n";
@@ -9598,28 +9620,28 @@ printModelGID(ClientData clientData, Tcl_Interp *interp, int argc, TCL_Char **ar
 	openMode mode = OVERWRITE;
 	if (argc >= 3)
 	{
-		if (strcmp(argv[i],"-append") == 0) 
+		if (strcmp(argv[i], "-append") == 0)
 		{
 			mode = APPEND;
 			i++;
 		}
-		if (strcmp(argv[i],"-eleRange") == 0) {
+		if (strcmp(argv[i], "-eleRange") == 0) {
 			//opserr<<"WARNING:commands: eleRange defined"<<endln;
 			eleRange = 1;
-			if (Tcl_GetInt(interp, argv[i+1], &startEle) != TCL_OK) {
-				opserr << "WARNING print node failed to get integer: " << argv[i+1] << endln;
+			if (Tcl_GetInt(interp, argv[i + 1], &startEle) != TCL_OK) {
+				opserr << "WARNING print node failed to get integer: " << argv[i + 1] << endln;
 				return TCL_ERROR;
 			}
-			if (Tcl_GetInt(interp, argv[i+2], &endEle) != TCL_OK) {
-				opserr << "WARNING print node failed to get integer: " << argv[i+2] << endln;
+			if (Tcl_GetInt(interp, argv[i + 2], &endEle) != TCL_OK) {
+				opserr << "WARNING print node failed to get integer: " << argv[i + 2] << endln;
 				return TCL_ERROR;
 			}
 			//opserr<<"startEle = "<<startEle<<" endEle = "<<endEle<<endln;
 		}
 	}
-		
-    if (outputFile.setFile(argv[1], mode) < 0) {
-        opserr << "WARNING printGID " << argv[1] << " failed to set the file\n";
+
+	if (outputFile.setFile(argv[1], mode) < 0) {
+		opserr << "WARNING printGID " << argv[1] << " failed to set the file\n";
 		return TCL_ERROR;
 	}
     
@@ -9925,6 +9947,9 @@ printModelGID(ClientData clientData, Tcl_Interp *interp, int argc, TCL_Char **ar
 	}
 
 	outputFile.close();
+
+#endif // _SAP
+
 	return res;
 }
 // Talledo End

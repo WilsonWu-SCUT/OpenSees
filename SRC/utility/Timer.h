@@ -94,6 +94,15 @@ class Timer
 #endif
 };
 
+#ifdef _SAP
+inline std::ostream& operator<< (std::ostream& out, const Timer& V)
+{
+	return out;
+}
+#else
+
+#endif // _SAP
+
 
 #endif
 

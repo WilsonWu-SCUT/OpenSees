@@ -292,7 +292,12 @@ ParallelMaterial::commitState(void)
     if (theModels[i]->commitState() != 0) {
       opserr << "WARNING ParallelMaterial::commitState() ";
       opserr << "MaterialModel failed to commitState():" ;
+
+#ifdef _SAP
+#else
       theModels[i]->Print(opserr);
+#endif // _SAP
+     
     }
   
   return 0;    
@@ -306,7 +311,14 @@ ParallelMaterial::revertToLastCommit(void)
     if (theModels[i]->revertToLastCommit() != 0) {
       opserr << "WARNING ParallelMaterial::revertToLastCommit() ";
       opserr << "MaterialModel failed to revertToLastCommit():" ;
+
+#ifdef _SAP
+
+#else
       theModels[i]->Print(opserr);
+#endif // _SAP
+
+      
     }
   
     return 0;    
@@ -324,7 +336,13 @@ ParallelMaterial::revertToStart(void)
 	if (theModels[i]->revertToStart() != 0) {
 	    opserr << "WARNING ParallelMaterial::revertToStart() ";
 	    opserr << "MaterialModel failed to revertToStart():" ;
-	    theModels[i]->Print(opserr);
+
+#ifdef _SAP
+#else
+        theModels[i]->Print(opserr);
+#endif // _SAP
+
+	    
 	}
     
     return 0;    

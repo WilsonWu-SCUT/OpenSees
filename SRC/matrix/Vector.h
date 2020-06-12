@@ -149,6 +149,13 @@ class Vector
     int fromFree;
 };
 
+#ifdef _SAP
+inline std::ostream& operator<< (std::ostream& out, const Vector& V)
+{
+	return out;
+}
+#endif // _SAP
+
 
 /********* INLINED VECTOR FUNCTIONS ***********/
 inline int 

@@ -549,7 +549,13 @@ Domain::addSP_Constraint(SP_Constraint *spConstraint)
     
     if (found == true) {
 	opserr << "Domain::addSP_Constraint - cannot add as node already constrained in that dof by existing SP_Constraint\n";
-	spConstraint->Print(opserr);
+
+#ifdef _SAP
+
+#else
+    spConstraint->Print(opserr);
+#endif // _SAP
+	
 	return false;
     }
 
@@ -558,8 +564,13 @@ Domain::addSP_Constraint(SP_Constraint *spConstraint)
   TaggedObject *other = theSPs->getComponentPtr(tag);
   if (other != 0) {
     opserr << "Domain::addSP_Constraint - cannot add as constraint with tag " << 
-      tag << "already exists in model\n";             
-    spConstraint->Print(opserr);
+      tag << "already exists in model\n";    
+
+#ifdef _SAP
+
+#else
+	spConstraint->Print(opserr);
+#endif // _SAP
 
     return false;
   }

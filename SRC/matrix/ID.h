@@ -104,6 +104,12 @@ class ID
     int fromFree;
 };
 
+#ifdef _SAP
+inline std::ostream& operator<< (std::ostream& out, const ID& V)
+{
+	return out;
+}
+#endif // _SAP
 
 inline int 
 ID::Size(void) const {return sz;}

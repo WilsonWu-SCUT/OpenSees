@@ -39,8 +39,12 @@
 
 void* OPS_SProfileSPDLinSolver()
 {
-    SProfileSPDLinSolver *theSolver = new SProfileSPDLinSolver(); 	
-    return new SProfileSPDLinSOE(*theSolver); 
+#ifdef _SAP
+	return nullptr;
+#else
+	SProfileSPDLinSolver* theSolver = new SProfileSPDLinSolver();
+	return new SProfileSPDLinSOE(*theSolver);
+#endif // _SAP
 }
 
 SProfileSPDLinSolver::SProfileSPDLinSolver(double tol)
@@ -304,7 +308,12 @@ SProfileSPDLinSolver::solve(void)
     */
 
   timer.pause();
+
+#ifdef _SAP
+#else
   timer.Print(opserr);
+#endif // _SAP
+ 
     return 0;
 }
 

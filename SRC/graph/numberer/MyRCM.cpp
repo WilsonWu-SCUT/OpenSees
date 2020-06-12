@@ -202,7 +202,12 @@ MyRCM::number(Graph &theGraph, int startVertex)
 	(*theRefResult)(i) = vertexPtr->getTag();
     }
 
-    theGraph.Print(opserr, 3);
+#ifdef _SAP
+
+#else
+	theGraph.Print(opserr, 3);
+#endif // _SAP
+
     opserr << *theRefResult;
     return *theRefResult;
 }

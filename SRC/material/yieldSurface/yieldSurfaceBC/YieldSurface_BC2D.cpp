@@ -640,7 +640,13 @@ double dj = getDrift(xj, yj);
 	 	opserr << "ERROR - YieldSurface_BC2D::interpolate(xi, yi, xj, yj)\n";
 		opserr << "point 2 is inside\n";
 		opserr << xi << "," << yi << "  " << xj << "," << yj << " : "<< dj<<"\n";
+
+#ifdef _SAP
+#else
 		hModel->Print(opserr);
+#endif // _SAP
+
+		
 		opserr << "\a";
 		return 0;
 	}
@@ -662,7 +668,12 @@ int count = 0;
 			opserr << "\nYieldSurface_BC2D::Interpolate()-> Error: Unable to converge\n";
 			opserr << "xi, yi: " << xi << ","<< yi << "\t xj, yj: " << xj << "," << yj << "\n";
 			opserr << "Drift Point j = " << dj << "\n";
+
+#ifdef _SAP
+#else
 			hModel->Print(opserr);
+#endif // _SAP
+
 			opserr << "\a";
 			return 1;
 		}
@@ -712,7 +723,12 @@ double dj = getSurfaceDrift(xj, yj);
 	 	opserr << "ERROR - YieldSurface_BC2D::interpolateClose(xi, yi, xj, yj)\n";
 		opserr << "point 2 is inside\n";
 		opserr << xi << "," << yi << "  " << xj << "," << yj << " : "<< dj<<"\n";
+
+#ifdef _SAP
+#else
 		hModel->Print(opserr);
+#endif // _SAP
+
 		opserr << "\a";
 		return 0;
 	}
@@ -733,7 +749,12 @@ int count = 0;
 		{
 			opserr << "\nYieldSurface_BC2D::InterpolateClose()-> Error: Unable to converge\n";
 			opserr << "xi, yi: " << xi << ","<< yi << "\t xj, yj: " << xj << "," << yj << "\n";
+
+#ifdef _SAP
+#else
 			hModel->Print(opserr);
+#endif // _SAP
+
 			opserr << "\a";
 			return 1;
 		}

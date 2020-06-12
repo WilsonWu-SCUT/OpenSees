@@ -2101,7 +2101,12 @@ int grad_Number=passedGradNumber-1;
 		dCommittedMultiSurfacePlastModul[ii+grad_Number*(numOfSurfaces+1)]=dPlast_modul;
 			if ((ii==1) &&(grad_Number==0))
 			{
-				  opserr.setPrecision(16);
+
+#ifdef _SAP
+#else
+				opserr.setPrecision(16);
+#endif // _SAP
+				
 
 //				  opserr << "step1. setUpSurfaceSensitivity, size is:"<<size<< endln;
 //				  opserr << "step1. setUpSurfaceSensitivity, dsize is:"<<dSize<< endln;

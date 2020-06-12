@@ -182,6 +182,13 @@ class Matrix
     int fromFree;
 };
 
+#ifdef _SAP
+inline std::ostream& operator<< (std::ostream& out, const Matrix& V)
+{
+	return out;
+}
+#endif // _SAP
+
 
 /********* INLINED MATRIX FUNCTIONS ***********/
 inline int 

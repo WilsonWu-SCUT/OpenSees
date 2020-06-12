@@ -1157,8 +1157,12 @@ int OrthogonalPlaneSamplingAnalysis::analyze(void)
 	}
 			
 	// ---- inform user
-	
+
+#ifdef _SAP
+
+#else
 	opserr.setPrecision(14);
+#endif // _SAP
 	
 	if (printFlag ==1) 
 		opserr<<"\n=====probability:"<<probability<<"    COV:"<<cov<<"======\n"<<endln;

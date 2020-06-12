@@ -37,7 +37,7 @@
 //
 // What: "@(#) Graph.h, revA"
 
-#include <OPS_Stream.h>
+#include <OPS_Globals.h>
 #include <vector>
 
 class Vertex;
@@ -84,6 +84,18 @@ class Graph
     int nextFreeTag;
     std::vector<Vertex*> vertices;
 };
+
+#ifdef _SAP
+inline std::ostream& operator<< (std::ostream& out, const Graph& V)
+{
+	return out;
+}
+#else
+
+#endif // _SAP
+
+
+
 
 #endif
 

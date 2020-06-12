@@ -38,7 +38,7 @@
 //
 // What: "@(#) TaggedObject.h, revA"
 
-#include <OPS_Stream.h>
+#include <OPS_Globals.h>
 
 class Domain;
 
@@ -59,6 +59,13 @@ class TaggedObject
   private:    
     int theTag;    
 };
+
+#ifdef _SAP
+inline std::ostream& operator<< (std::ostream& out, const TaggedObject& V)
+{
+	return out;
+}
+#endif // _SAP
 
 // INLINED TAGGED_OBJECT FUNCTIONS
 

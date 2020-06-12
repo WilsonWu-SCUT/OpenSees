@@ -1103,7 +1103,14 @@ FE_Element::updateElement(void)
 {
   if (myEle != 0) {
     return myEle->update();
-    opserr << "FE_Element::update()"; myEle->Print(opserr, 0);
+
+#ifdef _SAP
+
+#else
+	opserr << "FE_Element::update()"; myEle->Print(opserr, 0);
+#endif // _SAP
+
+    
   }
 
   

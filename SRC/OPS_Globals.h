@@ -42,10 +42,26 @@
 
 #define _USING_OpenSees_STREAMS
 #include <OPS_Stream.h>
+#include <sstream>
+#include <iostream>
+
 //extern OPS_Stream &opserr;
-extern OPS_Stream *opserrPtr;
+extern OPS_Stream* opserrPtr;
+
+#define _SAP
+
+#ifdef _SAP
+//#pragma warning(disable: 4101)
+//#pragma warning(disable: 4244)
+//#pragma warning(disable: 4267)
+static std::ostringstream osbuff;
+#define opserr osbuff
+#define endln "\n"
+#else
+
 #define opserr (*opserrPtr)
 #define endln "\n"
+#endif // SAP
 
 #include <string.h>
 #include <stdlib.h>

@@ -5142,10 +5142,13 @@ TclReliabilityModelBuilder_runGFunVisualizationAnalysis(ClientData clientData, T
 int 
 TclReliabilityModelBuilder_printReliability(ClientData clientData, Tcl_Interp *interp, int argc, TCL_Char **argv)
 {
-  if (argc > 1)
-    theReliabilityDomain->Print(opserr, 1);
-  else
-    theReliabilityDomain->Print(opserr);
+#ifdef _SAP
+#else
+	if (argc > 1)
+		theReliabilityDomain->Print(opserr, 1);
+	else
+		theReliabilityDomain->Print(opserr);
+#endif // _SAP
 
   return TCL_OK;
 }
