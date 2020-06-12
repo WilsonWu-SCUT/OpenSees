@@ -48,32 +48,38 @@ Matrix BeamFiberMaterial::tangent(3,3);
 
 void* OPS_BeamFiberMaterial()
 {
-    int argc = OPS_GetNumRemainingInputArgs() + 2;
-    if (argc < 4) {
-	opserr << "WARNING insufficient arguments\n";
-	opserr << "Want: nDMaterial BeamFiber tag? matTag?" << endln;
-	return 0;
-    }
 
-    int tags[2];
-    int numdata = 2;
-    if (OPS_GetIntInput(&numdata, tags) < 0) {
-	opserr << "WARNING invalid nDMaterial BeamFiber tag or matTag" << endln;
-	return 0;
-    }
+#ifdef _SAP
+	return nullptr;
+#else
+	int argc = OPS_GetNumRemainingInputArgs() + 2;
+	if (argc < 4) {
+		opserr << "WARNING insufficient arguments\n";
+		opserr << "Want: nDMaterial BeamFiber tag? matTag?" << endln;
+		return 0;
+	}
 
-    int tag = tags[0];
-    int matTag = tags[1];
+	int tags[2];
+	int numdata = 2;
+	if (OPS_GetIntInput(&numdata, tags) < 0) {
+		opserr << "WARNING invalid nDMaterial BeamFiber tag or matTag" << endln;
+		return 0;
+	}
 
-    NDMaterial *threeDMaterial = OPS_getNDMaterial(matTag);
-    if (threeDMaterial == 0) {
-	opserr << "WARNING nD material does not exist\n";
-	opserr << "nD material: " << matTag;
-	opserr << "\nBeamFiber nDMaterial: " << tag << endln;
-	return 0;
-    }
+	int tag = tags[0];
+	int matTag = tags[1];
 
-    return new BeamFiberMaterial(tag, *threeDMaterial);
+	NDMaterial* threeDMaterial = OPS_getNDMaterial(matTag);
+	if (threeDMaterial == 0) {
+		opserr << "WARNING nD material does not exist\n";
+		opserr << "nD material: " << matTag;
+		opserr << "\nBeamFiber nDMaterial: " << tag << endln;
+		return 0;
+	}
+
+	return new BeamFiberMaterial(tag, *threeDMaterial);
+#endif // _SAP
+
 }
 
 BeamFiberMaterial::BeamFiberMaterial(void)

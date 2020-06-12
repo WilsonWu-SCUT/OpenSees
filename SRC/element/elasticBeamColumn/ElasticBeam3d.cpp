@@ -50,89 +50,255 @@
 #include <string>
 #include <elementAPI.h>
 
+
+void ElasticBeam3d::setStiffMatrix(const double& L)
+{
+	double oneOverL = 1.0 / L;
+	double EoverL = E * oneOverL;
+	double EAoverL = A * EoverL;			// EA/L
+
+	double EIzoverL2 = 2.0 * Iz * EoverL;		// 2EIz/L
+	double EIzoverL3 = 3.0 * Iz * EoverL;		// 3EIz/L
+	double EIzoverL4 = 2.0 * EIzoverL2;		// 4EIz/L
+
+	double EIyoverL2 = 2.0 * Iy * EoverL;		// 2EIy/L
+	double EIyoverL3 = 3.0 * Iy * EoverL;		// 3EIy/L
+	double EIyoverL4 = 2.0 * EIyoverL2;		// 4EIy/L
+
+	double GJoverL = G * Jx * oneOverL;         // GJ/L
+
+	kb(0, 0) = EAoverL;
+	kb(5, 5) = GJoverL;
+
+	//不释放
+	if (MRelease == 0)
+	{
+		kb(1, 1) = kb(2, 2) = EIzoverL4;
+		kb(2, 1) = kb(1, 2) = EIzoverL2;
+		kb(3, 3) = kb(4, 4) = EIyoverL4;
+		kb(4, 3) = kb(3, 4) = EIyoverL2;
+	}
+	else if (MRelease == 1)
+	{
+		//赋予刚度
+		kb(2, 2) = EIzoverL3;
+		kb(4, 4) = EIyoverL3;
+	}
+	else if (MRelease == 2)
+	{
+		//赋予刚度
+		kb(1, 1) = EIzoverL3;
+		kb(3, 3) = EIyoverL3;
+	}
+}
+
+void ElasticBeam3d::setBasicForce(const double& L)
+{
+	const Vector& v = theCoordTransf->getBasicTrialDisp();
+
+	double oneOverL = 1.0 / L;
+	double EoverL = E * oneOverL;
+	double EAoverL = A * EoverL;			// EA/L
+	double EIzoverL2 = 2.0 * Iz * EoverL;		// 2EIz/L
+	double EIzoverL3 = 3.0 * Iz * EoverL;		// 3EIz/L
+	double EIzoverL4 = 2.0 * EIzoverL2;		// 4EIz/L
+
+	double EIyoverL2 = 2.0 * Iy * EoverL;		// 2EIy/L
+	double EIyoverL3 = 3.0 * Iy * EoverL;		// 3EIy/L
+	double EIyoverL4 = 2.0 * EIyoverL2;		// 4EIy/L
+
+	double GJoverL = G * Jx * oneOverL;         // GJ/L
+
+	q(0) = EAoverL * v(0);
+	q(5) = GJoverL * v(5);
+
+	if (MRelease == 0)
+	{
+		q(1) = EIzoverL4 * v(1) + EIzoverL2 * v(2);
+		q(2) = EIzoverL2 * v(1) + EIzoverL4 * v(2);
+		q(3) = EIyoverL4 * v(3) + EIyoverL2 * v(4);
+		q(4) = EIyoverL2 * v(3) + EIyoverL4 * v(4);
+	}
+	else
+	{
+		q(1) = MRelease == 2 ? EIzoverL3 * v(1) : 0;
+		q(2) = MRelease == 1 ? EIzoverL3 * v(2) : 0;
+		q(3) = MRelease == 2 ? EIyoverL3 * v(3) : 0;
+		q(4) = MRelease == 1 ? EIyoverL3 * v(4) : 0;
+	}
+}
+
+int ElasticBeam3d::addPointLoad(const double& N, const double& Py, const double& Pz, const double& aOverL, const double& L)
+{
+	if (aOverL < 0.0 || aOverL > 1.0)
+		return 0;
+
+	double a = aOverL * L;
+	double b = L - a;
+
+	// Reactions in basic system
+	p0[0] -= N;
+	double V1, V2;
+	V1 = Py * (1.0 - aOverL);
+	V2 = Py * aOverL;
+	p0[1] -= V1;
+	p0[2] -= V2;
+	V1 = Pz * (1.0 - aOverL);
+	V2 = Pz * aOverL;
+	p0[3] -= V1;
+	p0[4] -= V2;
+
+	double L2 = 1.0 / (L * L);
+	double a2 = a * a;
+	double b2 = b * b;
+
+	// Fixed end forces in basic system
+	q0[0] -= N * aOverL;
+	double M1, M2;
+	if (MRelease == 0) {
+		M1 = -a * b2 * Py * L2;
+		M2 = a2 * b * Py * L2;
+		q0[1] += M1;
+		q0[2] += M2;
+		M1 = -a * b2 * Pz * L2;
+		M2 = a2 * b * Pz * L2;
+		q0[3] -= M1;
+		q0[4] -= M2;
+	}
+	else if (MRelease == 1) {
+		M2 = 0.5 * Py * a * b * L2 * (a + L);
+		q0[2] += M2;
+		M2 = 0.5 * Pz * a * b * L2 * (a + L);
+		q0[4] -= M2;
+	}
+	else if (MRelease == 2) {
+		M2 = -0.5 * Py * a * b * L2 * (b + L);
+		q0[1] += M1;
+		M2 = -0.5 * Pz * a * b * L2 * (b + L);
+		q0[3] -= M2;
+	}
+	else if (MRelease == 3) {
+		// Nothing to do
+	}
+	return 0;
+}
+
+void ElasticBeam3d::addGeneralPartialLoad(const double& Ni, const double& Nj, const double& Pyi, const double& Pyj, 
+    const double& Pzi, const double& Pzj, const double& aOverL, const double& bOverL, const double& L)
+{
+	//拆分基本长度
+	double deltaLengthFactor = 0.001;
+	double lengthFactor = deltaLengthFactor * L;
+	//调换位置
+	double minOverL = aOverL <= bOverL ? aOverL : bOverL;
+	double maxOverL = aOverL <= bOverL ? bOverL : aOverL;
+	//距离
+	double distOverL = maxOverL - minOverL;
+	//从左到右开始遍历
+	for (double overL = 0; overL <= distOverL; overL += deltaLengthFactor)
+	{
+		double Py = ((Pyj - Pyi) / distOverL * overL + Pyi) * lengthFactor;
+		double Pz = ((Pzj - Pzi) / distOverL * overL + Pzi) * lengthFactor;
+		double N = ((Nj - Ni) / distOverL * overL + Ni) * lengthFactor;
+		double targetX = minOverL + overL;
+		//添加节点荷载
+		addPointLoad(N, Py, Pz, targetX, L);
+	}
+}
+
 Matrix ElasticBeam3d::K(12,12);
 Vector ElasticBeam3d::P(12);
 Matrix ElasticBeam3d::kb(6,6);
 
 void* OPS_ElasticBeam3d(void)
 {
-    int numArgs = OPS_GetNumRemainingInputArgs();
-    if(numArgs < 10 && numArgs != 5) {
-	opserr<<"insufficient arguments:eleTag,iNode,jNode,A,E,G,J,Iy,Iz,transfTag\n";
-	return 0;
-    }
 
-    int ndm = OPS_GetNDM();
-    int ndf = OPS_GetNDF();
-    if(ndm != 3 || ndf != 6) {
-	opserr<<"ndm must be 3 and ndf must be 6\n";
-	return 0;
-    }
-
-    // inputs: 
-    int iData[3];
-    int numData = 3;
-    if(OPS_GetIntInput(&numData,&iData[0]) < 0) return 0;
-
-    SectionForceDeformation* theSection = 0;
-    CrdTransf* theTrans = 0;
-    double data[6];
-    int transfTag, secTag;
-
-    if(numArgs == 5) {
-	numData = 1;
-	if(OPS_GetIntInput(&numData,&secTag) < 0) return 0;
-	if(OPS_GetIntInput(&numData,&transfTag) < 0) return 0;
-
-	theSection = OPS_getSectionForceDeformation(secTag);
-	if(theSection == 0) {
-	    opserr<<"no section is found\n";
-	    return 0;
+#ifdef _SAP
+	return nullptr;
+#else
+	int numArgs = OPS_GetNumRemainingInputArgs();
+	if (numArgs < 10 && numArgs != 5) {
+		opserr << "insufficient arguments:eleTag,iNode,jNode,A,E,G,J,Iy,Iz,transfTag\n";
+		return 0;
 	}
-	theTrans = OPS_getCrdTransf(transfTag);
-	if(theTrans == 0) {
-	    opserr<<"no CrdTransf is found\n";
-	    return 0;
-	}
-    } else {
-	numData = 6;
-	if(OPS_GetDoubleInput(&numData,&data[0]) < 0) return 0;
-	numData = 1;
-	if(OPS_GetIntInput(&numData,&transfTag) < 0) return 0;
-	theTrans = OPS_getCrdTransf(transfTag);
-	if(theTrans == 0) {
-	    opserr<<"no CrdTransf is found\n";
-	    return 0;
-	}
-    }
-    
-    // options
-    double mass = 0.0;
-    int cMass = 0;
-    while(OPS_GetNumRemainingInputArgs() > 0) {
-	std::string theType = OPS_GetString();
-	if (theType == "-mass") {
-	    if(OPS_GetNumRemainingInputArgs() > 0) {
-		if(OPS_GetDoubleInput(&numData,&mass) < 0) return 0;
-	    }
-	} else if (theType == "-cMass") {
-	    cMass = 1;
-	}
-    }
 
-    if (theSection != 0) {
-	return new ElasticBeam3d(iData[0],iData[1],iData[2],theSection,*theTrans,mass,cMass); 
-    } else {
-	return new ElasticBeam3d(iData[0],data[0],data[1],data[2],data[3],data[4],
-				 data[5],iData[1],iData[2],*theTrans, mass,cMass);
-    }
+	int ndm = OPS_GetNDM();
+	int ndf = OPS_GetNDF();
+	if (ndm != 3 || ndf != 6) {
+		opserr << "ndm must be 3 and ndf must be 6\n";
+		return 0;
+	}
+
+	// inputs: 
+	int iData[3];
+	int numData = 3;
+	if (OPS_GetIntInput(&numData, &iData[0]) < 0) return 0;
+
+	SectionForceDeformation* theSection = 0;
+	CrdTransf* theTrans = 0;
+	double data[6];
+	int transfTag, secTag;
+
+	if (numArgs == 5) {
+		numData = 1;
+		if (OPS_GetIntInput(&numData, &secTag) < 0) return 0;
+		if (OPS_GetIntInput(&numData, &transfTag) < 0) return 0;
+
+		theSection = OPS_getSectionForceDeformation(secTag);
+		if (theSection == 0) {
+			opserr << "no section is found\n";
+			return 0;
+		}
+		theTrans = OPS_getCrdTransf(transfTag);
+		if (theTrans == 0) {
+			opserr << "no CrdTransf is found\n";
+			return 0;
+		}
+	}
+	else {
+		numData = 6;
+		if (OPS_GetDoubleInput(&numData, &data[0]) < 0) return 0;
+		numData = 1;
+		if (OPS_GetIntInput(&numData, &transfTag) < 0) return 0;
+		theTrans = OPS_getCrdTransf(transfTag);
+		if (theTrans == 0) {
+			opserr << "no CrdTransf is found\n";
+			return 0;
+		}
+	}
+
+	// options
+	double mass = 0.0;
+	int cMass = 0;
+	while (OPS_GetNumRemainingInputArgs() > 0) {
+		std::string theType = OPS_GetString();
+		if (theType == "-mass") {
+			if (OPS_GetNumRemainingInputArgs() > 0) {
+				if (OPS_GetDoubleInput(&numData, &mass) < 0) return 0;
+			}
+		}
+		else if (theType == "-cMass") {
+			cMass = 1;
+		}
+	}
+
+	if (theSection != 0) {
+		return new ElasticBeam3d(iData[0], iData[1], iData[2], theSection, *theTrans, mass, cMass);
+	}
+	else {
+		return new ElasticBeam3d(iData[0], data[0], data[1], data[2], data[3], data[4],
+			data[5], iData[1], iData[2], *theTrans, mass, cMass);
+	}
+#endif // _SAP
+
+
 }
 
 
 ElasticBeam3d::ElasticBeam3d()
   :Element(0,ELE_TAG_ElasticBeam3d), 
   A(0.0), E(0.0), G(0.0), Jx(0.0), Iy(0.0), Iz(0.0), rho(0.0), cMass(0),
-  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0)
+  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0)
 {
   // does nothing
   q0[0] = 0.0;
@@ -157,7 +323,7 @@ ElasticBeam3d::ElasticBeam3d(int tag, double a, double e, double g,
 			     CrdTransf &coordTransf, double r, int cm, int sectTag)
   :Element(tag,ELE_TAG_ElasticBeam3d), 
   A(a), E(e), G(g), Jx(jx), Iy(iy), Iz(iz), rho(r), cMass(cm), sectionTag(sectTag),
-  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0)
+  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0)
 {
   connectedExternalNodes(0) = Nd1;
   connectedExternalNodes(1) = Nd2;
@@ -189,7 +355,7 @@ ElasticBeam3d::ElasticBeam3d(int tag, double a, double e, double g,
 ElasticBeam3d::ElasticBeam3d(int tag, int Nd1, int Nd2, SectionForceDeformation *section,  
 			     CrdTransf &coordTransf, double r, int cm)
   :Element(tag,ELE_TAG_ElasticBeam3d), 
-  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0)
+  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0)
 {
   if (section != 0) {
     sectionTag = section->getTag();
@@ -252,6 +418,41 @@ ElasticBeam3d::ElasticBeam3d(int tag, int Nd1, int Nd2, SectionForceDeformation 
   // set node pointers to NULL
   for (int i=0; i<2; i++)
     theNodes[i] = 0;      
+}
+
+
+ElasticBeam3d::ElasticBeam3d(int tag, double a, double e, double g,
+	double jx, double iy, double iz, int Nd1, int Nd2,
+	CrdTransf& coordTransf, int release,double r, int cm, int sectTag)
+	:Element(tag, ELE_TAG_ElasticBeam3d),
+	A(a), E(e), G(g), Jx(jx), Iy(iy), Iz(iz), rho(r), cMass(cm), sectionTag(sectTag),
+	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(release)
+{
+	connectedExternalNodes(0) = Nd1;
+	connectedExternalNodes(1) = Nd2;
+
+	theCoordTransf = coordTransf.getCopy3d();
+
+	if (!theCoordTransf) {
+		opserr << "ElasticBeam3d::ElasticBeam3d -- failed to get copy of coordinate transformation\n";
+		exit(-1);
+	}
+
+	q0[0] = 0.0;
+	q0[1] = 0.0;
+	q0[2] = 0.0;
+	q0[3] = 0.0;
+	q0[4] = 0.0;
+
+	p0[0] = 0.0;
+	p0[1] = 0.0;
+	p0[2] = 0.0;
+	p0[3] = 0.0;
+	p0[4] = 0.0;
+
+	// set node pointers to NULL
+	for (int i = 0; i < 2; i++)
+		theNodes[i] = 0;
 }
 
 ElasticBeam3d::~ElasticBeam3d()
@@ -372,36 +573,19 @@ ElasticBeam3d::getTangentStiff(void)
   const Vector &v = theCoordTransf->getBasicTrialDisp();
   
   double L = theCoordTransf->getInitialLength();
-  double oneOverL = 1.0/L;
-  double EoverL   = E*oneOverL;
-  double EAoverL  = A*EoverL;			// EA/L
-  double EIzoverL2 = 2.0*Iz*EoverL;		// 2EIz/L
-  double EIzoverL4 = 2.0*EIzoverL2;		// 4EIz/L
-  double EIyoverL2 = 2.0*Iy*EoverL;		// 2EIy/L
-  double EIyoverL4 = 2.0*EIyoverL2;		// 4EIy/L
-  double GJoverL = G*Jx*oneOverL;         // GJ/L
-  
-  q(0) = EAoverL*v(0);
-  q(1) = EIzoverL4*v(1) + EIzoverL2*v(2);
-  q(2) = EIzoverL2*v(1) + EIzoverL4*v(2);
-  q(3) = EIyoverL4*v(3) + EIyoverL2*v(4);
-  q(4) = EIyoverL2*v(3) + EIyoverL4*v(4);    
-  q(5) = GJoverL*v(5);
+
+  //设定刚度
+  setStiffMatrix(L);
+  //设定局部力
+  setBasicForce(L);
 
   q(0) += q0[0];
   q(1) += q0[1];
   q(2) += q0[2];
   q(3) += q0[3];
   q(4) += q0[4];
-  
-  kb(0,0) = EAoverL;
-  kb(1,1) = kb(2,2) = EIzoverL4;
-  kb(2,1) = kb(1,2) = EIzoverL2;
-  kb(3,3) = kb(4,4) = EIyoverL4;
-  kb(4,3) = kb(3,4) = EIyoverL2;
-  kb(5,5) = GJoverL;
 
-  return theCoordTransf->getGlobalStiffMatrix(kb,q);
+  return theCoordTransf->getGlobalStiffMatrix(kb, q);
 }
 
 
@@ -411,22 +595,8 @@ ElasticBeam3d::getInitialStiff(void)
   //  const Vector &v = theCoordTransf->getBasicTrialDisp();
   
   double L = theCoordTransf->getInitialLength();
-  double oneOverL = 1.0/L;
-  double EoverL   = E*oneOverL;
-  double EAoverL  = A*EoverL;			// EA/L
-  double EIzoverL2 = 2.0*Iz*EoverL;		// 2EIz/L
-  double EIzoverL4 = 2.0*EIzoverL2;		// 4EIz/L
-  double EIyoverL2 = 2.0*Iy*EoverL;		// 2EIy/L
-  double EIyoverL4 = 2.0*EIyoverL2;		// 4EIy/L
-  double GJoverL = G*Jx*oneOverL;         // GJ/L
-  
-  kb(0,0) = EAoverL;
-  kb(1,1) = kb(2,2) = EIzoverL4;
-  kb(2,1) = kb(1,2) = EIzoverL2;
-  kb(3,3) = kb(4,4) = EIyoverL4;
-  kb(4,3) = kb(3,4) = EIyoverL2;
-  kb(5,5) = GJoverL;
-  
+  //设定刚度
+  setStiffMatrix(L);
   return theCoordTransf->getInitialGlobalStiffMatrix(kb);
 }
 
@@ -510,69 +680,46 @@ ElasticBeam3d::addLoad(ElementalLoad *theLoad, double loadFactor)
   double L = theCoordTransf->getInitialLength();
 
   if (type == LOAD_TAG_Beam3dUniformLoad) {
-    double wy = data(0)*loadFactor;  // Transverse
-    double wz = data(1)*loadFactor;  // Transverse
-    double wx = data(2)*loadFactor;  // Axial (+ve from node I to J)
+	  double wy = data(0) * loadFactor;  // Transverse
+	  double wz = data(1) * loadFactor;  // Transverse
+	  double wx = data(2) * loadFactor;  // Axial (+ve from node I to J)
 
-    double Vy = 0.5*wy*L;
-    double Mz = Vy*L/6.0; // wy*L*L/12
-    double Vz = 0.5*wz*L;
-    double My = Vz*L/6.0; // wz*L*L/12
-    double P = wx*L;
+	  double Vy = 0.5 * wy * L;
+	  double Mz = Vy * L / 6.0; // wy*L*L/12
+	  double Vz = 0.5 * wz * L;
+	  double My = Vz * L / 6.0; // wz*L*L/12
+	  double P = wx * L;
 
-    // Reactions in basic system
-    p0[0] -= P;
-    p0[1] -= Vy;
-    p0[2] -= Vy;
-    p0[3] -= Vz;
-    p0[4] -= Vz;
+	  // Reactions in basic system
+	  p0[0] -= P;
+	  p0[1] -= Vy;
+	  p0[2] -= Vy;
+	  p0[3] -= Vz;
+	  p0[4] -= Vz;
 
-    // Fixed end forces in basic system
-    q0[0] -= 0.5*P;
-    q0[1] -= Mz;
-    q0[2] += Mz;
-    q0[3] += My;
-    q0[4] -= My;
+	  // Fixed end forces in basic system
+	  q0[0] -= 0.5 * P;
+
+	  if (MRelease == 0) {
+		  q0[1] -= Mz;
+		  q0[2] += Mz;
+		  q0[3] += My;
+		  q0[4] -= My;
+	  }
+	  else if (MRelease == 1) {
+		  q0[2] += wy * L * L / 8;
+		  q0[4] -= wz * L * L / 8;
+	  }
+	  else if (MRelease == 2) {
+		  q0[1] -= wy * L * L / 8;
+		  q0[3] += wz * L * L / 8;
+	  }
+	  else if (MRelease == 3) {
+		  // Nothing to do
+	  }
   }
   else if (type == LOAD_TAG_Beam3dPointLoad) {
-    double Py = data(0)*loadFactor;
-    double Pz = data(1)*loadFactor;
-    double N  = data(2)*loadFactor;
-    double aOverL = data(3);
-
-    if (aOverL < 0.0 || aOverL > 1.0)
-      return 0;
-
-    double a = aOverL*L;
-    double b = L-a;
-
-    // Reactions in basic system
-    p0[0] -= N;
-    double V1, V2;
-    V1 = Py*(1.0-aOverL);
-    V2 = Py*aOverL;
-    p0[1] -= V1;
-    p0[2] -= V2;
-    V1 = Pz*(1.0-aOverL);
-    V2 = Pz*aOverL;
-    p0[3] -= V1;
-    p0[4] -= V2;
-
-    double L2 = 1.0/(L*L);
-    double a2 = a*a;
-    double b2 = b*b;
-
-    // Fixed end forces in basic system
-    q0[0] -= N*aOverL;
-    double M1, M2;
-    M1 = -a * b2 * Py * L2;
-    M2 = a2 * b * Py * L2;
-    q0[1] += M1;
-    q0[2] += M2;
-    M1 = -a * b2 * Pz * L2;
-    M2 = a2 * b * Pz * L2;
-    q0[3] -= M1;
-    q0[4] -= M2;
+      addPointLoad(data(2) * loadFactor, data(0) * loadFactor, data(1) * loadFactor, data(3), L);
   }
   else {
     opserr << "ElasticBeam3d::addLoad()  -- load type unknown for element with tag: " << this->getTag() << endln;
@@ -671,32 +818,16 @@ ElasticBeam3d::getResistingForceIncInertia()
 const Vector &
 ElasticBeam3d::getResistingForce()
 {
-  const Vector &v = theCoordTransf->getBasicTrialDisp();
+	double L = theCoordTransf->getInitialLength();
+	setBasicForce(L);
+
+	q(0) += q0[0];
+	q(1) += q0[1];
+	q(2) += q0[2];
+	q(3) += q0[3];
+	q(4) += q0[4];
   
-  double L = theCoordTransf->getInitialLength();
-  double oneOverL = 1.0/L;
-  double EoverL   = E*oneOverL;
-  double EAoverL  = A*EoverL;			// EA/L
-  double EIzoverL2 = 2.0*Iz*EoverL;		// 2EIz/L
-  double EIzoverL4 = 2.0*EIzoverL2;		// 4EIz/L
-  double EIyoverL2 = 2.0*Iy*EoverL;		// 2EIy/L
-  double EIyoverL4 = 2.0*EIyoverL2;		// 4EIy/L
-  double GJoverL = G*Jx*oneOverL;         // GJ/L
-  
-  q(0) = EAoverL*v(0);
-  q(1) = EIzoverL4*v(1) + EIzoverL2*v(2);
-  q(2) = EIzoverL2*v(1) + EIzoverL4*v(2);
-  q(3) = EIyoverL4*v(3) + EIyoverL2*v(4);
-  q(4) = EIyoverL2*v(3) + EIyoverL4*v(4);    
-  q(5) = GJoverL*v(5);
-  
-  q(0) += q0[0];
-  q(1) += q0[1];
-  q(2) += q0[2];
-  q(3) += q0[3];
-  q(4) += q0[4];
-  
-  Vector p0Vec(p0, 5);
+    Vector p0Vec(p0, 5);
   
   //  opserr << q;
 

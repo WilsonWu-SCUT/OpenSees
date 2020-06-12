@@ -53,42 +53,50 @@
 void *
 OPS_ElasticOrthotropicMaterial(void)
 {
-  NDMaterial *theMaterial = 0;
-  
-  int numArgs = OPS_GetNumRemainingInputArgs();
-  
-  if (numArgs < 10) {
-    opserr << "Want: nDMaterial ElasticOrthotropic $tag $Ex $Ey $Ez $vxy $vyz $vzx $Gxy $Gyz $Gzx <$rho>" << endln;
-    return 0;	
-  }
-  
-  int iData[1];
-  double dData[10];
-  dData[9] = 0.0;
-  
-  int numData = 1;
-  if (OPS_GetInt(&numData, iData) != 0) {
-    opserr << "WARNING invalid integer tag: nDMaterial ElasticOrthotropic \n";
-    return 0;
-  }
-  
-  if (numArgs > 10) 
-    numData = 10;
-  else
-    numData = 9;
-  
-  if (OPS_GetDouble(&numData, dData) != 0) {
-    opserr << "WARNING invalid data: nDMaterial EasticIsotropic : " << iData[0] <<"\n";
-    return 0;
-  }  
-  
-  theMaterial = new ElasticOrthotropicMaterial(iData[0], 
-	dData[0], dData[1], dData[2],
-	dData[3], dData[4], dData[5],
-	dData[6], dData[7], dData[8], dData[9]);
-  
-  return theMaterial;
+
+#ifdef _SAP
+    return nullptr;
+#else
+    NDMaterial* theMaterial = 0;
+
+    int numArgs = OPS_GetNumRemainingInputArgs();
+
+    if (numArgs < 10) {
+        opserr << "Want: nDMaterial ElasticOrthotropic $tag $Ex $Ey $Ez $vxy $vyz $vzx $Gxy $Gyz $Gzx <$rho>" << endln;
+        return 0;
+    }
+
+    int iData[1];
+    double dData[10];
+    dData[9] = 0.0;
+
+    int numData = 1;
+    if (OPS_GetInt(&numData, iData) != 0) {
+        opserr << "WARNING invalid integer tag: nDMaterial ElasticOrthotropic \n";
+        return 0;
+    }
+
+    if (numArgs > 10)
+        numData = 10;
+    else
+        numData = 9;
+
+    if (OPS_GetDouble(&numData, dData) != 0) {
+        opserr << "WARNING invalid data: nDMaterial EasticIsotropic : " << iData[0] << "\n";
+        return 0;
+    }
+
+    theMaterial = new ElasticOrthotropicMaterial(iData[0],
+        dData[0], dData[1], dData[2],
+        dData[3], dData[4], dData[5],
+        dData[6], dData[7], dData[8], dData[9]);
+
+    return theMaterial;
 }
+#endif // _SAP
+}
+
+  
 
 
 

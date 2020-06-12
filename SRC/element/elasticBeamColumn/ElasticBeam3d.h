@@ -53,7 +53,11 @@ class ElasticBeam3d : public Element
           int Nd1, int Nd2, CrdTransf &theTransf,
           double rho = 0.0, int cMass = 0,
           int sectionTag = 0);
-
+	ElasticBeam3d(int tag, double A, double E, double G,
+		double Jx, double Iy, double Iz,
+		int Nd1, int Nd2, CrdTransf& theTransf, int Release,
+		double rho = 0.0, int cMass = 0,
+		int sectionTag = 0);
     ElasticBeam3d(int tag, int Nd1, int Nd2, SectionForceDeformation *section, 
 		  CrdTransf &theTransf, double rho = 0.0, int cMass = 0);
 
@@ -96,6 +100,15 @@ class ElasticBeam3d : public Element
     int setParameter (const char **argv, int argc, Parameter &param);
     int updateParameter (int parameterID, Information &info);
 
+private:
+	void setStiffMatrix(const double& length);
+	void setBasicForce(const double& length);
+	int addPointLoad(const double& N, const double& Py, const double& Pz,
+		const double& aOverL, const double& length);
+	void addGeneralPartialLoad(const double& Ni, const double& Nj, const double& Pyi,
+		const double& Pyj, const double& Pzi, const double& Pzj,
+		const double& aOverL, const double& bOverL, const double& length);
+
   private:
     double A,E,G,Jx,Iy,Iz;
 
@@ -111,6 +124,8 @@ class ElasticBeam3d : public Element
     Vector q;
     double q0[5];  // Fixed end forces in basic system (no torsion)
     double p0[5];  // Reactions in basic system (no torsion)
+
+    int MRelease;      // moment release 0=none, 1=I, 2=J, 3=I,J
  
     Node *theNodes[2];
 
