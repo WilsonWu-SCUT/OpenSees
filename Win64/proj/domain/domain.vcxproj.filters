@@ -309,6 +309,15 @@
     <ClCompile Include="..\..\..\SRC\domain\load\Beam3dPartialUniformLoad.cpp">
       <Filter>load\beam</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\SRC\domain\load\Beam3dGenranlPartialLoad.cpp">
+      <Filter>load\beam</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\SRC\domain\load\Beam3dTrapezoidLoad.cpp">
+      <Filter>load\beam</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\SRC\domain\load\Beam3dTriangularLoad.cpp">
+      <Filter>load\beam</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\SRC\domain\node\NodalLoad.h">
@@ -570,6 +579,15 @@
       <Filter>timeSeries</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\SRC\domain\load\Beam3dPartialUniformLoad.h">
+      <Filter>load\beam</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\SRC\domain\load\Beam3dGenranlPartialLoad.h">
+      <Filter>load\beam</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\SRC\domain\load\Beam3dTrapezoidLoad.h">
+      <Filter>load\beam</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\SRC\domain\load\Beam3dTriangularLoad.h">
       <Filter>load\beam</Filter>
     </ClInclude>
   </ItemGroup>

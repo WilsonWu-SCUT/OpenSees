@@ -55,7 +55,8 @@ class ElasticBeam3d : public Element
           int sectionTag = 0);
 	ElasticBeam3d(int tag, double A, double E, double G,
 		double Jx, double Iy, double Iz,
-		int Nd1, int Nd2, CrdTransf& theTransf, int Release,
+		int Nd1, int Nd2, CrdTransf& theTransf, 
+        int Release, int monitorPointNum,
 		double rho = 0.0, int cMass = 0,
 		int sectionTag = 0);
     ElasticBeam3d(int tag, int Nd1, int Nd2, SectionForceDeformation *section, 
@@ -124,6 +125,9 @@ private:
     Vector q;
     double q0[5];  // Fixed end forces in basic system (no torsion)
     double p0[5];  // Reactions in basic system (no torsion)
+
+    Vector monitorMoment; //º‡≤‚µ„Õ‰æÿ
+    Vector monitorShear; //º‡≤‚µ„ºÙ¡¶
 
     int MRelease;      // moment release 0=none, 1=I, 2=J, 3=I,J
  

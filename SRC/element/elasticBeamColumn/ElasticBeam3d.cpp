@@ -298,7 +298,8 @@ void* OPS_ElasticBeam3d(void)
 ElasticBeam3d::ElasticBeam3d()
   :Element(0,ELE_TAG_ElasticBeam3d), 
   A(0.0), E(0.0), G(0.0), Jx(0.0), Iy(0.0), Iz(0.0), rho(0.0), cMass(0),
-  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0)
+  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0),
+    monitorMoment(0), monitorShear(0)
 {
   // does nothing
   q0[0] = 0.0;
@@ -323,7 +324,8 @@ ElasticBeam3d::ElasticBeam3d(int tag, double a, double e, double g,
 			     CrdTransf &coordTransf, double r, int cm, int sectTag)
   :Element(tag,ELE_TAG_ElasticBeam3d), 
   A(a), E(e), G(g), Jx(jx), Iy(iy), Iz(iz), rho(r), cMass(cm), sectionTag(sectTag),
-  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0)
+  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0),
+    monitorMoment(0), monitorShear(0)
 {
   connectedExternalNodes(0) = Nd1;
   connectedExternalNodes(1) = Nd2;
@@ -355,7 +357,8 @@ ElasticBeam3d::ElasticBeam3d(int tag, double a, double e, double g,
 ElasticBeam3d::ElasticBeam3d(int tag, int Nd1, int Nd2, SectionForceDeformation *section,  
 			     CrdTransf &coordTransf, double r, int cm)
   :Element(tag,ELE_TAG_ElasticBeam3d), 
-  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0)
+  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0),
+    monitorMoment(0), monitorShear(0)
 {
   if (section != 0) {
     sectionTag = section->getTag();
@@ -423,10 +426,12 @@ ElasticBeam3d::ElasticBeam3d(int tag, int Nd1, int Nd2, SectionForceDeformation 
 
 ElasticBeam3d::ElasticBeam3d(int tag, double a, double e, double g,
 	double jx, double iy, double iz, int Nd1, int Nd2,
-	CrdTransf& coordTransf, int release,double r, int cm, int sectTag)
+	CrdTransf& coordTransf, int release, int monitorPointNum, 
+    double r, int cm, int sectTag)
 	:Element(tag, ELE_TAG_ElasticBeam3d),
 	A(a), E(e), G(g), Jx(jx), Iy(iy), Iz(iz), rho(r), cMass(cm), sectionTag(sectTag),
-	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(release)
+	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(release),
+    monitorMoment(monitorPointNum), monitorShear(monitorPointNum)
 {
 	connectedExternalNodes(0) = Nd1;
 	connectedExternalNodes(1) = Nd2;
@@ -679,7 +684,8 @@ ElasticBeam3d::addLoad(ElementalLoad *theLoad, double loadFactor)
   const Vector &data = theLoad->getData(type, loadFactor);
   double L = theCoordTransf->getInitialLength();
 
-  if (type == LOAD_TAG_Beam3dUniformLoad) {
+  if (type == LOAD_TAG_Beam3dUniformLoad) 
+  {
 	  double wy = data(0) * loadFactor;  // Transverse
 	  double wz = data(1) * loadFactor;  // Transverse
 	  double wx = data(2) * loadFactor;  // Axial (+ve from node I to J)
@@ -700,28 +706,93 @@ ElasticBeam3d::addLoad(ElementalLoad *theLoad, double loadFactor)
 	  // Fixed end forces in basic system
 	  q0[0] -= 0.5 * P;
 
-	  if (MRelease == 0) {
+	  if (MRelease == 0) 
+      {
 		  q0[1] -= Mz;
 		  q0[2] += Mz;
 		  q0[3] += My;
 		  q0[4] -= My;
 	  }
-	  else if (MRelease == 1) {
+	  else if (MRelease == 1) 
+      {
 		  q0[2] += wy * L * L / 8;
 		  q0[4] -= wz * L * L / 8;
 	  }
-	  else if (MRelease == 2) {
+	  else if (MRelease == 2) 
+      {
 		  q0[1] -= wy * L * L / 8;
 		  q0[3] += wz * L * L / 8;
 	  }
-	  else if (MRelease == 3) {
+	  else if (MRelease == 3) 
+      {
 		  // Nothing to do
 	  }
   }
   else if (type == LOAD_TAG_Beam3dPointLoad) {
       addPointLoad(data(2) * loadFactor, data(0) * loadFactor, data(1) * loadFactor, data(3), L);
   }
-  else {
+  //多态荷载模式
+  //data[0]: Pyi
+  //data[1]: Pzi
+  //data[2]: Ni
+  //data[3]: Pyj
+  //data[4]: Pzj
+  //data[5]: Nj
+  //data[6]: aOverL
+  //data[7]: bOverL
+  else if (type == LOAD_TAG_Beam3dGenranlPartialLoad)
+  {
+	  double Pyi = data(0) * loadFactor;
+	  double Pzi = data(1) * loadFactor;
+	  double Ni = data(2) * loadFactor;
+
+	  double Pyj = data(3) * loadFactor;
+	  double Pzj = data(4) * loadFactor;
+	  double Nj = data(5) * loadFactor;
+
+	  double aOverL = data(6);
+	  double bOverL = data(7);
+
+	  addGeneralPartialLoad(Ni, Nj, Pyi, Pyj, Pzi, Pzj, aOverL, bOverL, L);
+  }
+
+  //三角形荷载
+  //data[0]: Py
+  //data[1]: Pz
+  //data[2]: aOverL
+  else if (type == LOAD_TAG_Beam3dTriangularLoad)
+  {
+	  double Py = data(0) * loadFactor;
+	  double Pz = data(1) * loadFactor;
+
+	  double aOverL = data(2);
+	  //左侧三角形
+	  addGeneralPartialLoad(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
+	  //右侧三角形
+	  addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, aOverL, 1, L);
+  }
+
+  //梯形荷载
+  //data[0]: Py
+  //data[1]: Pz
+  //data[2]: aOverL
+  //data[3]: bOverL
+  else if (type == LOAD_TAG_Beam3dTrapezoidLoad)
+  {
+	  double Py = data(0) * loadFactor;
+	  double Pz = data(1) * loadFactor;
+
+	  double aOverL = data(2);
+	  double bOverL = data(3);
+	  //左侧三角形
+	  addGeneralPartialLoad(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
+	  //中央三角形
+	  addGeneralPartialLoad(0, 0, Py, Py, Pz, Pz, aOverL, bOverL, L);
+	  //右侧三角形
+	  addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, bOverL, 1, L);
+  }
+  else 
+  {
     opserr << "ElasticBeam3d::addLoad()  -- load type unknown for element with tag: " << this->getTag() << endln;
     return -1;
   }
