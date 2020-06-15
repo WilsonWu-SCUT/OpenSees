@@ -237,6 +237,12 @@ Element::getMass(void)
   return *theMatrix;
 }
 
+
+const Vector& Element::getLocalResistingForce(void)
+{
+    return Vector(0);
+}
+
 const Vector &
 Element::getResistingForceIncInertia(void) 
 {

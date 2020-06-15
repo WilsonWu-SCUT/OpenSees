@@ -911,6 +911,44 @@ ElasticBeam3d::getResistingForce()
   return P;
 }
 
+
+const Vector& ElasticBeam3d::getLocalResistingForce(void)
+{
+    double N, V, M1, M2, T;
+	double L = theCoordTransf->getInitialLength();
+	double oneOverL = 1.0 / L;
+
+	// Axial
+	N = q(0);
+	P(6) = N;
+	P(0) = -N + p0[0];
+
+	// Torsion
+	T = q(5);
+	P(9) = T;
+	P(3) = -T;
+
+	// Moments about z and shears along y
+	M1 = q(1);
+	M2 = q(2);
+	P(5) = M1;
+	P(11) = M2;
+	V = (M1 + M2) * oneOverL;
+	P(1) = V + p0[1];
+	P(7) = -V + p0[2];
+
+	// Moments about y and shears along z
+	M1 = q(3);
+	M2 = q(4);
+	P(4) = M1;
+	P(10) = M2;
+	V = (M1 + M2) * oneOverL;
+	P(2) = -V + p0[3];
+	P(8) = V + p0[4];
+
+    return P;
+}
+
 int
 ElasticBeam3d::sendSelf(int cTag, Channel &theChannel)
 {
@@ -1297,9 +1335,6 @@ ElasticBeam3d::setResponse(const char **argv, int argc, OPS_Stream &output)
 int
 ElasticBeam3d::getResponse (int responseID, Information &eleInfo)
 {
-  double N, V, M1, M2, T;
-  double L = theCoordTransf->getInitialLength();
-  double oneOverL = 1.0/L;
   static Vector Res(12);
   Res = this->getResistingForce();
 
@@ -1311,38 +1346,9 @@ ElasticBeam3d::getResponse (int responseID, Information &eleInfo)
     return eleInfo.setVector(Res);
     
   case 3: // local forces
-    // Axial
-    N = q(0);
-    P(6) =  N;
-    P(0) = -N+p0[0];
-    
-    // Torsion
-    T = q(5);
-    P(9) =  T;
-    P(3) = -T;
-    
-    // Moments about z and shears along y
-    M1 = q(1);
-    M2 = q(2);
-    P(5)  = M1;
-    P(11) = M2;
-    V = (M1+M2)*oneOverL;
-    P(1) =  V+p0[1];
-    P(7) = -V+p0[2];
-    
-    // Moments about y and shears along z
-    M1 = q(3);
-    M2 = q(4);
-    P(4)  = M1;
-    P(10) = M2;
-    V = (M1+M2)*oneOverL;
-    P(2) = -V+p0[3];
-    P(8) =  V+p0[4];
-
-    return eleInfo.setVector(P);
+    return eleInfo.setVector(this->getLocalResistingForce());
     
   case 4: // basic forces
-
     return eleInfo.setVector(q);
 
   case 5:

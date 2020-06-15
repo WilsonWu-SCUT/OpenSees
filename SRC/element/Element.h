@@ -85,6 +85,7 @@ class Element : public DomainComponent
 
     // methods for obtaining resisting force (force includes elemental loads)
     virtual const Vector &getResistingForce(void) =0;
+    virtual const Vector& getLocalResistingForce(void);
     virtual const Vector &getResistingForceIncInertia(void);        
 
     // method for obtaining information specific to an element

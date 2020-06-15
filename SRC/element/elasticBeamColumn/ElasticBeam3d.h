@@ -87,6 +87,7 @@ class ElasticBeam3d : public Element
     int addInertiaLoadToUnbalance(const Vector &accel);
 
     const Vector &getResistingForce(void);
+    const Vector& getLocalResistingForce(void);
     const Vector &getResistingForceIncInertia(void);            
     
     int sendSelf(int commitTag, Channel &theChannel);
