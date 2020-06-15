@@ -187,7 +187,7 @@ void ElasticBeam3d::addGeneralPartialLoad(const double& Ni, const double& Nj, co
     const double& Pzi, const double& Pzj, const double& aOverL, const double& bOverL, const double& L)
 {
 	//拆分基本长度
-	double deltaLengthFactor = 0.001;
+	double deltaLengthFactor = 1E-6;
 	double lengthFactor = deltaLengthFactor * L;
 	//调换位置
 	double minOverL = aOverL <= bOverL ? aOverL : bOverL;
@@ -195,7 +195,7 @@ void ElasticBeam3d::addGeneralPartialLoad(const double& Ni, const double& Nj, co
 	//距离
 	double distOverL = maxOverL - minOverL;
 	//从左到右开始遍历
-	for (double overL = 0; overL <= distOverL; overL += deltaLengthFactor)
+	for (double overL = deltaLengthFactor / 2; overL <= distOverL; overL += deltaLengthFactor)
 	{
 		double Py = ((Pyj - Pyi) / distOverL * overL + Pyi) * lengthFactor;
 		double Pz = ((Pzj - Pzi) / distOverL * overL + Pzi) * lengthFactor;

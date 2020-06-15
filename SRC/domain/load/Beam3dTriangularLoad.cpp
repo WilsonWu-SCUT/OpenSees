@@ -53,7 +53,7 @@ const Vector & Beam3dTriangularLoad::getData(int &type, double loadFactor)
 	data(0) = Py;
 	data(1) = Pz;
 
-	data(3) = aOverL;
+	data(2) = aOverL;
 
 	return data;
 }
