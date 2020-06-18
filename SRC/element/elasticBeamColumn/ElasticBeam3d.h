@@ -44,6 +44,8 @@ class Response;
 class Renderer;
 class SectionForceDeformation;
 
+#define Monitor_Point_Offset 0.01
+
 class ElasticBeam3d : public Element
 {
   public:
@@ -89,6 +91,7 @@ class ElasticBeam3d : public Element
     const Vector &getResistingForce(void);
     const Vector& getLocalResistingForce(void);
     const Vector &getResistingForceIncInertia(void);            
+    const Matrix getMonitorForce(void) override;
     
     int sendSelf(int commitTag, Channel &theChannel);
     int recvSelf(int commitTag, Channel &theChannel, FEM_ObjectBroker &theBroker);
@@ -110,6 +113,10 @@ private:
 	void addGeneralPartialLoad(const double& Ni, const double& Nj, const double& Pyi,
 		const double& Pyj, const double& Pzi, const double& Pzj,
 		const double& aOverL, const double& bOverL, const double& length);
+    void addPointLoadToMonitor(const double& N, const double& Py, const double& Pz, const double& aOverL, const double& L);
+	void addGeneralPartialLoadToMonitor(const double& Ni, const double& Nj, const double& Pyi,
+		const double& Pyj, const double& Pzi, const double& Pzj,
+		const double& aOverL, const double& bOverL, const double& length);
 
   private:
     double A,E,G,Jx,Iy,Iz;
@@ -126,9 +133,6 @@ private:
     Vector q;
     double q0[5];  // Fixed end forces in basic system (no torsion)
     double p0[5];  // Reactions in basic system (no torsion)
-
-    Vector monitorMoment; //º‡≤‚µ„Õ‰æÿ
-    Vector monitorShear; //º‡≤‚µ„ºÙ¡¶
 
     int MRelease;      // moment release 0=none, 1=I, 2=J, 3=I,J
  

@@ -44,12 +44,39 @@
 #include <Node.h>
 #include <Domain.h>
 
+#include <algorithm>
+
 Element  *ops_TheActiveElement = 0;
+
+
+void Element::addMonitorPoint(const double& aoverL)
+{
+    // No Monitor Defined
+    if (Element::isSetMonitorForce || monitorPos.size() == 0) return;
+    //is new Monitor Point
+    bool isNewPoint = true;
+    for each (auto& pos in monitorPos)
+    {
+		if (std::abs(aoverL - pos) < Monitor_Point_Dist_Tol)
+		{
+			isNewPoint = false;
+		}
+    }
+    //no new monitor point
+    if (!isNewPoint) return;
+    //Input MonotorPoint
+    monitorPos.push_back(aoverL);
+    //Sort
+    std::sort(monitorPos.begin(), monitorPos.end(), [](double& a, double& b) { return a < b; });
+}
 
 Matrix **Element::theMatrices; 
 Vector **Element::theVectors1; 
 Vector **Element::theVectors2; 
 int  Element::numMatrices(0);
+
+
+bool Element::isSetMonitorForce = false;
 
 // Element(int tag, int noExtNodes);
 // 	constructor that takes the element's unique tag and the number
@@ -58,7 +85,8 @@ int  Element::numMatrices(0);
 Element::Element(int tag, int cTag) 
   :DomainComponent(tag, cTag), alphaM(0.0), 
   betaK(0.0), betaK0(0.0), betaKc(0.0), 
-   Kc(0), previousK(0), numPreviousK(0), index(-1), nodeIndex(-1)
+   Kc(0), previousK(0), numPreviousK(0), index(-1), nodeIndex(-1),
+   monitorPos(0)
 {
   // does nothing
   ops_TheActiveElement = this;
@@ -74,6 +102,9 @@ Element::~Element()
       delete previousK[i];
     delete [] previousK;
   }
+
+  if(deltaMonitorForce != 0)
+	  delete deltaMonitorForce;
 }
 
 int
@@ -308,6 +339,23 @@ Element::getResistingForceIncInertia(void)
   return *theVector;
 }
 
+
+const Matrix Element::getMonitorForce(void)
+{
+    return Matrix(0, 0);
+}
+
+void Element::initialMonitorForce(void)
+{
+	//No Monitor Point
+	if (monitorPos.size() == 0)
+		return;
+	//Delete Pointer
+	if (deltaMonitorForce != 0)
+		delete deltaMonitorForce;
+    //Initial
+    deltaMonitorForce = new Matrix(6, monitorPos.size());
+}
 
 const Vector &
 Element::getRayleighDampingForces(void) 

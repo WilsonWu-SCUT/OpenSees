@@ -3501,22 +3501,36 @@ Domain::setMass(const Matrix &mass, int nodeTag)
 int
 Domain::calculateNodalReactions(int flag)
 {
+    Node* theNode;
+    Element* theElement;
+    ElementIter& theElements = this->getElements();
+    //Ensure to SetMonitorForce
+    Element::isSetMonitorForce = true;
 
-  // apply load again! (for case ele load removed and record before an analysis)
-  this->applyLoad(committedTime);
+    //Reset Monitor Force
+    while ((theElement = theElements()) != 0)
+    {
+        if (theElement->isSubdomain() == false)
+        {
+            theElement->initialMonitorForce();
+        }
+    }
 
-  Node *theNode;
-  Element *theElement;
-  NodeIter &theNodes = this->getNodes();
-  while ((theNode = theNodes()) != 0) {
-    theNode->resetReactionForce(flag);
-  }
+    // apply load again! (for case ele load removed and record before an analysis)
+    this->applyLoad(committedTime);
+    //Set ReactionForce
+    NodeIter& theNodes = this->getNodes();
+    while ((theNode = theNodes()) != 0) {
+        theNode->resetReactionForce(flag);
+    }
+    //Set ResistingForce
+    while ((theElement = theElements()) != 0)
+        if (theElement->isSubdomain() == false)
+            theElement->addResistingForceToNodalReaction(flag);
 
-  ElementIter &theElements = this->getElements();
-  while ((theElement = theElements()) != 0)
-    if (theElement->isSubdomain() == false)
-      theElement->addResistingForceToNodalReaction(flag);
-  return 0;
+	//Close to SetMonitorForce
+	Element::isSetMonitorForce = false;
+    return 0;
 }
 
 //added by SAJalali

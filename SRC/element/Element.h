@@ -39,6 +39,9 @@
 
 #include <DomainComponent.h>
 #include <ID.h>
+#include <vector>
+
+#define Monitor_Point_Dist_Tol 0.005
 
 class Matrix;
 class Vector;
@@ -86,7 +89,9 @@ class Element : public DomainComponent
     // methods for obtaining resisting force (force includes elemental loads)
     virtual const Vector &getResistingForce(void) =0;
     virtual const Vector& getLocalResistingForce(void);
-    virtual const Vector &getResistingForceIncInertia(void);        
+    virtual const Vector &getResistingForceIncInertia(void);     
+    virtual const Matrix getMonitorForce(void);
+    void initialMonitorForce(void);
 
     // method for obtaining information specific to an element
     virtual Response *setResponse(const char **argv, int argc, 
@@ -113,13 +118,21 @@ class Element : public DomainComponent
     virtual int storePreviousK(int numK);
     virtual const Matrix *getPreviousK(int num);
 
+	//Set Monitor Force Or not
+	static bool isSetMonitorForce;
+
 #if _DLL
 	const Vector& getRayleighDampingForces(void);
 #endif
+
+
+
 protected:
 #if !_DLL
 	const Vector& getRayleighDampingForces(void);
 #endif
+    void addMonitorPoint(const double& aoverL);
+
     double alphaM, betaK, betaK0, betaKc;
     Matrix *Kc; // pointer to hold last committed matrix if needed for rayleigh damping
 
@@ -132,6 +145,9 @@ protected:
     static Vector ** theVectors1; 
     static Vector ** theVectors2; 
     static int numMatrices;
+
+	Matrix* deltaMonitorForce; //Monitor the force of the internal section
+    std::vector<double> monitorPos;  //Monitor Point Position of the Element (Length Ratio)
 
   private:
 };

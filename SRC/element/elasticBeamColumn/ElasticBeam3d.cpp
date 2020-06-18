@@ -154,7 +154,8 @@ int ElasticBeam3d::addPointLoad(const double& N, const double& Py, const double&
 
 	// Fixed end forces in basic system
 	q0[0] -= N * aOverL;
-	double M1, M2;
+    double M1 = 0;
+    double M2 = 0;
 	if (MRelease == 0) {
 		M1 = -a * b2 * Py * L2;
 		M2 = a2 * b * Py * L2;
@@ -203,6 +204,61 @@ void ElasticBeam3d::addGeneralPartialLoad(const double& Ni, const double& Nj, co
 		double targetX = minOverL + overL;
 		//添加节点荷载
 		addPointLoad(N, Py, Pz, targetX, L);
+	}
+}
+
+void ElasticBeam3d::addPointLoadToMonitor(const double& N, const double& Py, const double& Pz, const double& aOverL, const double& L)
+{
+    if (!Element::isSetMonitorForce || monitorPos.size() == 0)
+        return;
+	//Monitor Delta Length
+	auto prtNum = monitorPos.size();
+    //Target Point Position
+    auto targetPos = aOverL * L;
+    //For each the monitor point of the element
+    for (int prtInex = 0; prtInex < prtNum; prtInex++)
+    {
+        auto presentMonitorPos = monitorPos[prtInex] * L;
+        //Whether is the target point or not
+        if (presentMonitorPos > targetPos)
+        {
+            //Obtain the deltaForce in local axis
+
+			// Axial
+			(*deltaMonitorForce)(0, prtInex) += N;
+			// Moments about z and shears along y
+            (*deltaMonitorForce)(1, prtInex) += Py;
+            (*deltaMonitorForce)(5, prtInex) += Py * (presentMonitorPos - targetPos);
+			// Moments about y and shears along z
+            (*deltaMonitorForce)(2, prtInex) += Pz;
+            (*deltaMonitorForce)(4, prtInex) += Pz * (presentMonitorPos - targetPos);
+            break;;
+        }
+    }
+}
+
+void ElasticBeam3d::addGeneralPartialLoadToMonitor(const double& Ni, const double& Nj, const double& Pyi, const double& Pyj, 
+    const double& Pzi, const double& Pzj, const double& aOverL, const double& bOverL, const double& L)
+{
+	if (!Element::isSetMonitorForce)
+		return;
+	//拆分基本长度
+	double deltaLengthFactor = 1E-6;
+	double lengthFactor = deltaLengthFactor * L;
+	//调换位置
+	double minOverL = aOverL <= bOverL ? aOverL : bOverL;
+	double maxOverL = aOverL <= bOverL ? bOverL : aOverL;
+	//距离
+	double distOverL = maxOverL - minOverL;
+	//从左到右开始遍历
+	for (double overL = deltaLengthFactor / 2; overL <= distOverL; overL += deltaLengthFactor)
+	{
+		double Py = ((Pyj - Pyi) / distOverL * overL + Pyi) * lengthFactor;
+		double Pz = ((Pzj - Pzi) / distOverL * overL + Pzi) * lengthFactor;
+		double N = ((Nj - Ni) / distOverL * overL + Ni) * lengthFactor;
+		double targetX = minOverL + overL;
+		//添加节点荷载
+        addPointLoadToMonitor(N, Py, Pz, targetX, L);
 	}
 }
 
@@ -298,8 +354,7 @@ void* OPS_ElasticBeam3d(void)
 ElasticBeam3d::ElasticBeam3d()
   :Element(0,ELE_TAG_ElasticBeam3d), 
   A(0.0), E(0.0), G(0.0), Jx(0.0), Iy(0.0), Iz(0.0), rho(0.0), cMass(0),
-  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0),
-    monitorMoment(0), monitorShear(0)
+  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0)
 {
   // does nothing
   q0[0] = 0.0;
@@ -324,8 +379,7 @@ ElasticBeam3d::ElasticBeam3d(int tag, double a, double e, double g,
 			     CrdTransf &coordTransf, double r, int cm, int sectTag)
   :Element(tag,ELE_TAG_ElasticBeam3d), 
   A(a), E(e), G(g), Jx(jx), Iy(iy), Iz(iz), rho(r), cMass(cm), sectionTag(sectTag),
-  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0),
-    monitorMoment(0), monitorShear(0)
+  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0)
 {
   connectedExternalNodes(0) = Nd1;
   connectedExternalNodes(1) = Nd2;
@@ -357,8 +411,7 @@ ElasticBeam3d::ElasticBeam3d(int tag, double a, double e, double g,
 ElasticBeam3d::ElasticBeam3d(int tag, int Nd1, int Nd2, SectionForceDeformation *section,  
 			     CrdTransf &coordTransf, double r, int cm)
   :Element(tag,ELE_TAG_ElasticBeam3d), 
-  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0),
-    monitorMoment(0), monitorShear(0)
+  Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0)
 {
   if (section != 0) {
     sectionTag = section->getTag();
@@ -430,13 +483,18 @@ ElasticBeam3d::ElasticBeam3d(int tag, double a, double e, double g,
     double r, int cm, int sectTag)
 	:Element(tag, ELE_TAG_ElasticBeam3d),
 	A(a), E(e), G(g), Jx(jx), Iy(iy), Iz(iz), rho(r), cMass(cm), sectionTag(sectTag),
-	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(release),
-    monitorMoment(monitorPointNum), monitorShear(monitorPointNum)
+	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(release)
 {
 	connectedExternalNodes(0) = Nd1;
 	connectedExternalNodes(1) = Nd2;
 
 	theCoordTransf = coordTransf.getCopy3d();
+
+    //Monitor Points
+    auto deltaL = 1.0 / (monitorPointNum + 1);
+    //input
+    for (int i = 1; i <= monitorPointNum + 1; i++)
+        monitorPos.push_back(deltaL * i);
 
 	if (!theCoordTransf) {
 		opserr << "ElasticBeam3d::ElasticBeam3d -- failed to get copy of coordinate transformation\n";
@@ -727,9 +785,18 @@ ElasticBeam3d::addLoad(ElementalLoad *theLoad, double loadFactor)
       {
 		  // Nothing to do
 	  }
+      //Monitor get Load
+      addGeneralPartialLoadToMonitor(wx, wx, wy, wy, wz, wz, 0, 1, L);
   }
-  else if (type == LOAD_TAG_Beam3dPointLoad) {
+  else if (type == LOAD_TAG_Beam3dPointLoad) 
+  {
+      //General Point Load
       addPointLoad(data(2) * loadFactor, data(0) * loadFactor, data(1) * loadFactor, data(3), L);
+      //Not to Set Monitor Load Then try push monitor load
+      addMonitorPoint(data(3) - Monitor_Point_Offset);
+      addMonitorPoint(data(3) + Monitor_Point_Offset);
+	  //Monitor get Load
+      addPointLoadToMonitor(data(2) * loadFactor, data(0) * loadFactor, data(1) * loadFactor, data(3), L);
   }
   //多态荷载模式
   //data[0]: Pyi
@@ -754,6 +821,8 @@ ElasticBeam3d::addLoad(ElementalLoad *theLoad, double loadFactor)
 	  double bOverL = data(7);
 
 	  addGeneralPartialLoad(Ni, Nj, Pyi, Pyj, Pzi, Pzj, aOverL, bOverL, L);
+	  //Monitor get Load
+	  addGeneralPartialLoadToMonitor(Ni, Nj, Pyi, Pyj, Pzi, Pzj, aOverL, bOverL, L);
   }
 
   //三角形荷载
@@ -770,6 +839,11 @@ ElasticBeam3d::addLoad(ElementalLoad *theLoad, double loadFactor)
 	  addGeneralPartialLoad(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
 	  //右侧三角形
 	  addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, aOverL, 1, L);
+
+	  //Monitor get Load
+	  addGeneralPartialLoadToMonitor(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
+	  //Monitor get Load
+	  addGeneralPartialLoadToMonitor(0, 0, Py, 0, Pz, 0, aOverL, 1, L);
   }
 
   //梯形荷载
@@ -790,6 +864,13 @@ ElasticBeam3d::addLoad(ElementalLoad *theLoad, double loadFactor)
 	  addGeneralPartialLoad(0, 0, Py, Py, Pz, Pz, aOverL, bOverL, L);
 	  //右侧三角形
 	  addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, bOverL, 1, L);
+
+	  //Monitor get Load
+	  addGeneralPartialLoadToMonitor(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
+	  //Monitor get Load
+	  addGeneralPartialLoadToMonitor(0, 0, Py, Py, Pz, Pz, aOverL, bOverL, L);
+	  //Monitor get Load
+	  addGeneralPartialLoadToMonitor(0, 0, Py, 0, Pz, 0, bOverL, 1, L);
   }
   else 
   {
@@ -885,6 +966,39 @@ ElasticBeam3d::getResistingForceIncInertia()
   return P;
 }
 
+
+const Matrix ElasticBeam3d::getMonitorForce(void)
+{
+    double L = theCoordTransf->getInitialLength();
+    auto monitorNum = deltaMonitorForce->noCols();
+    Matrix forceMatrix(6, monitorNum + 1);
+    auto& localForce = this->getLocalResistingForce();
+    //Get the force In I
+    for (int i = 0; i < 6; i++)
+        forceMatrix(i, 0) = localForce(i);
+	//Get the force In each Section
+    for (int colIndex = 1; colIndex < monitorNum + 1; colIndex++)
+    {
+        auto deltaLengthFactor = colIndex == 1 ?
+            monitorPos[0] : monitorPos[colIndex - 1] - monitorPos[colIndex - 2];
+        for (int rowIndex = 0; rowIndex < 6; rowIndex++)
+        {
+			forceMatrix(rowIndex, colIndex) =
+				forceMatrix(rowIndex, colIndex - 1) + (*deltaMonitorForce)(rowIndex, colIndex - 1);
+            //Moment Cause By endForce
+			if (rowIndex == 4)
+			{
+				forceMatrix(rowIndex, colIndex) += forceMatrix(2, colIndex - 1) * deltaLengthFactor * L;
+			}
+			else if (rowIndex == 5)
+			{
+				forceMatrix(rowIndex, colIndex) += forceMatrix(1, colIndex - 1) * deltaLengthFactor * L;
+			}
+        }
+           
+    }
+    return forceMatrix;
+}
 
 const Vector &
 ElasticBeam3d::getResistingForce()
@@ -1421,4 +1535,6 @@ ElasticBeam3d::updateParameter (int parameterID, Information &info)
 		return -1;
 	}
 }
+
+
 
