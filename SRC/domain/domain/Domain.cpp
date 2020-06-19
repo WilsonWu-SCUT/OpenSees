@@ -3523,7 +3523,9 @@ Domain::calculateNodalReactions(int flag)
     while ((theNode = theNodes()) != 0) {
         theNode->resetReactionForce(flag);
     }
+
     //Set ResistingForce
+    theElements = this->getElements();
     while ((theElement = theElements()) != 0)
         if (theElement->isSubdomain() == false)
             theElement->addResistingForceToNodalReaction(flag);
