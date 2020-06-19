@@ -735,150 +735,230 @@ ElasticBeam3d::zeroLoad(void)
   return;
 }
 
-int 
-ElasticBeam3d::addLoad(ElementalLoad *theLoad, double loadFactor)
+//int 
+//ElasticBeam3d::addLoad(ElementalLoad *theLoad, double loadFactor)
+//{
+//  int type;
+//  const Vector &data = theLoad->getData(type, loadFactor);
+//  double L = theCoordTransf->getInitialLength();
+//
+//  if (type == LOAD_TAG_Beam3dUniformLoad) 
+//  {
+//	  double wy = data(0) * loadFactor;  // Transverse
+//	  double wz = data(1) * loadFactor;  // Transverse
+//	  double wx = data(2) * loadFactor;  // Axial (+ve from node I to J)
+//
+//	  double Vy = 0.5 * wy * L;
+//	  double Mz = Vy * L / 6.0; // wy*L*L/12
+//	  double Vz = 0.5 * wz * L;
+//	  double My = Vz * L / 6.0; // wz*L*L/12
+//	  double P = wx * L;
+//
+//	  // Reactions in basic system
+//	  p0[0] -= P;
+//	  p0[1] -= Vy;
+//	  p0[2] -= Vy;
+//	  p0[3] -= Vz;
+//	  p0[4] -= Vz;
+//
+//	  // Fixed end forces in basic system
+//	  q0[0] -= 0.5 * P;
+//
+//	  if (MRelease == 0) 
+//      {
+//		  q0[1] -= Mz;
+//		  q0[2] += Mz;
+//		  q0[3] += My;
+//		  q0[4] -= My;
+//	  }
+//	  else if (MRelease == 1) 
+//      {
+//		  q0[2] += wy * L * L / 8;
+//		  q0[4] -= wz * L * L / 8;
+//	  }
+//	  else if (MRelease == 2) 
+//      {
+//		  q0[1] -= wy * L * L / 8;
+//		  q0[3] += wz * L * L / 8;
+//	  }
+//	  else if (MRelease == 3) 
+//      {
+//		  // Nothing to do
+//	  }
+//      //Monitor get Load
+//      addGeneralPartialLoadToMonitor(wx, wx, wy, wy, wz, wz, 0, 1, L);
+//  }
+//  else if (type == LOAD_TAG_Beam3dPointLoad) 
+//  {
+//      //General Point Load
+//      addPointLoad(data(2) * loadFactor, data(0) * loadFactor, data(1) * loadFactor, data(3), L);
+//      //Not to Set Monitor Load Then try push monitor load
+//      addMonitorPoint(data(3) - Monitor_Point_Offset);
+//      addMonitorPoint(data(3) + Monitor_Point_Offset);
+//	  //Monitor get Load
+//      addPointLoadToMonitor(data(2) * loadFactor, data(0) * loadFactor, data(1) * loadFactor, data(3), L);
+//  }
+//  //多态荷载模式
+//  //data[0]: Pyi
+//  //data[1]: Pzi
+//  //data[2]: Ni
+//  //data[3]: Pyj
+//  //data[4]: Pzj
+//  //data[5]: Nj
+//  //data[6]: aOverL
+//  //data[7]: bOverL
+//  else if (type == LOAD_TAG_Beam3dGenranlPartialLoad)
+//  {
+//	  double Pyi = data(0) * loadFactor;
+//	  double Pzi = data(1) * loadFactor;
+//	  double Ni = data(2) * loadFactor;
+//
+//	  double Pyj = data(3) * loadFactor;
+//	  double Pzj = data(4) * loadFactor;
+//	  double Nj = data(5) * loadFactor;
+//
+//	  double aOverL = data(6);
+//	  double bOverL = data(7);
+//
+//	  addGeneralPartialLoad(Ni, Nj, Pyi, Pyj, Pzi, Pzj, aOverL, bOverL, L);
+//	  //Monitor get Load
+//	  addGeneralPartialLoadToMonitor(Ni, Nj, Pyi, Pyj, Pzi, Pzj, aOverL, bOverL, L);
+//  }
+//
+//  //三角形荷载
+//  //data[0]: Py
+//  //data[1]: Pz
+//  //data[2]: aOverL
+//  else if (type == LOAD_TAG_Beam3dTriangularLoad)
+//  {
+//	  double Py = data(0) * loadFactor;
+//	  double Pz = data(1) * loadFactor;
+//
+//	  double aOverL = data(2);
+//	  //左侧三角形
+//	  addGeneralPartialLoad(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
+//	  //右侧三角形
+//	  addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, aOverL, 1, L);
+//
+//	  //Monitor get Load
+//	  addGeneralPartialLoadToMonitor(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
+//	  //Monitor get Load
+//	  addGeneralPartialLoadToMonitor(0, 0, Py, 0, Pz, 0, aOverL, 1, L);
+//  }
+//
+//  //梯形荷载
+//  //data[0]: Py
+//  //data[1]: Pz
+//  //data[2]: aOverL
+//  //data[3]: bOverL
+//  else if (type == LOAD_TAG_Beam3dTrapezoidLoad)
+//  {
+//	  double Py = data(0) * loadFactor;
+//	  double Pz = data(1) * loadFactor;
+//
+//	  double aOverL = data(2);
+//	  double bOverL = data(3);
+//	  //左侧三角形
+//	  addGeneralPartialLoad(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
+//	  //中央三角形
+//	  addGeneralPartialLoad(0, 0, Py, Py, Pz, Pz, aOverL, bOverL, L);
+//	  //右侧三角形
+//	  addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, bOverL, 1, L);
+//
+//	  //Monitor get Load
+//	  addGeneralPartialLoadToMonitor(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
+//	  //Monitor get Load
+//	  addGeneralPartialLoadToMonitor(0, 0, Py, Py, Pz, Pz, aOverL, bOverL, L);
+//	  //Monitor get Load
+//	  addGeneralPartialLoadToMonitor(0, 0, Py, 0, Pz, 0, bOverL, 1, L);
+//  }
+//  else 
+//  {
+//    opserr << "ElasticBeam3d::addLoad()  -- load type unknown for element with tag: " << this->getTag() << endln;
+//    return -1;
+//  }
+//
+//  return 0;
+//}
+
+int
+ElasticBeam3d::addLoad(ElementalLoad* theLoad, double loadFactor)
 {
-  int type;
-  const Vector &data = theLoad->getData(type, loadFactor);
-  double L = theCoordTransf->getInitialLength();
+	int type;
+	const Vector& data = theLoad->getData(type, loadFactor);
+	double L = theCoordTransf->getInitialLength();
 
-  if (type == LOAD_TAG_Beam3dUniformLoad) 
-  {
-	  double wy = data(0) * loadFactor;  // Transverse
-	  double wz = data(1) * loadFactor;  // Transverse
-	  double wx = data(2) * loadFactor;  // Axial (+ve from node I to J)
+	if (type == LOAD_TAG_Beam3dUniformLoad) {
+		double wy = data(0) * loadFactor;  // Transverse
+		double wz = data(1) * loadFactor;  // Transverse
+		double wx = data(2) * loadFactor;  // Axial (+ve from node I to J)
 
-	  double Vy = 0.5 * wy * L;
-	  double Mz = Vy * L / 6.0; // wy*L*L/12
-	  double Vz = 0.5 * wz * L;
-	  double My = Vz * L / 6.0; // wz*L*L/12
-	  double P = wx * L;
+		double Vy = 0.5 * wy * L;
+		double Mz = Vy * L / 6.0; // wy*L*L/12
+		double Vz = 0.5 * wz * L;
+		double My = Vz * L / 6.0; // wz*L*L/12
+		double P = wx * L;
 
-	  // Reactions in basic system
-	  p0[0] -= P;
-	  p0[1] -= Vy;
-	  p0[2] -= Vy;
-	  p0[3] -= Vz;
-	  p0[4] -= Vz;
+		// Reactions in basic system
+		p0[0] -= P;
+		p0[1] -= Vy;
+		p0[2] -= Vy;
+		p0[3] -= Vz;
+		p0[4] -= Vz;
 
-	  // Fixed end forces in basic system
-	  q0[0] -= 0.5 * P;
+		// Fixed end forces in basic system
+		q0[0] -= 0.5 * P;
+		q0[1] -= Mz;
+		q0[2] += Mz;
+		q0[3] += My;
+		q0[4] -= My;
+	}
+	else if (type == LOAD_TAG_Beam3dPointLoad) {
+		double Py = data(0) * loadFactor;
+		double Pz = data(1) * loadFactor;
+		double N = data(2) * loadFactor;
+		double aOverL = data(3);
 
-	  if (MRelease == 0) 
-      {
-		  q0[1] -= Mz;
-		  q0[2] += Mz;
-		  q0[3] += My;
-		  q0[4] -= My;
-	  }
-	  else if (MRelease == 1) 
-      {
-		  q0[2] += wy * L * L / 8;
-		  q0[4] -= wz * L * L / 8;
-	  }
-	  else if (MRelease == 2) 
-      {
-		  q0[1] -= wy * L * L / 8;
-		  q0[3] += wz * L * L / 8;
-	  }
-	  else if (MRelease == 3) 
-      {
-		  // Nothing to do
-	  }
-      //Monitor get Load
-      addGeneralPartialLoadToMonitor(wx, wx, wy, wy, wz, wz, 0, 1, L);
-  }
-  else if (type == LOAD_TAG_Beam3dPointLoad) 
-  {
-      //General Point Load
-      addPointLoad(data(2) * loadFactor, data(0) * loadFactor, data(1) * loadFactor, data(3), L);
-      //Not to Set Monitor Load Then try push monitor load
-      addMonitorPoint(data(3) - Monitor_Point_Offset);
-      addMonitorPoint(data(3) + Monitor_Point_Offset);
-	  //Monitor get Load
-      addPointLoadToMonitor(data(2) * loadFactor, data(0) * loadFactor, data(1) * loadFactor, data(3), L);
-  }
-  //多态荷载模式
-  //data[0]: Pyi
-  //data[1]: Pzi
-  //data[2]: Ni
-  //data[3]: Pyj
-  //data[4]: Pzj
-  //data[5]: Nj
-  //data[6]: aOverL
-  //data[7]: bOverL
-  else if (type == LOAD_TAG_Beam3dGenranlPartialLoad)
-  {
-	  double Pyi = data(0) * loadFactor;
-	  double Pzi = data(1) * loadFactor;
-	  double Ni = data(2) * loadFactor;
+		if (aOverL < 0.0 || aOverL > 1.0)
+			return 0;
 
-	  double Pyj = data(3) * loadFactor;
-	  double Pzj = data(4) * loadFactor;
-	  double Nj = data(5) * loadFactor;
+		double a = aOverL * L;
+		double b = L - a;
 
-	  double aOverL = data(6);
-	  double bOverL = data(7);
+		// Reactions in basic system
+		p0[0] -= N;
+		double V1, V2;
+		V1 = Py * (1.0 - aOverL);
+		V2 = Py * aOverL;
+		p0[1] -= V1;
+		p0[2] -= V2;
+		V1 = Pz * (1.0 - aOverL);
+		V2 = Pz * aOverL;
+		p0[3] -= V1;
+		p0[4] -= V2;
 
-	  addGeneralPartialLoad(Ni, Nj, Pyi, Pyj, Pzi, Pzj, aOverL, bOverL, L);
-	  //Monitor get Load
-	  addGeneralPartialLoadToMonitor(Ni, Nj, Pyi, Pyj, Pzi, Pzj, aOverL, bOverL, L);
-  }
+		double L2 = 1.0 / (L * L);
+		double a2 = a * a;
+		double b2 = b * b;
 
-  //三角形荷载
-  //data[0]: Py
-  //data[1]: Pz
-  //data[2]: aOverL
-  else if (type == LOAD_TAG_Beam3dTriangularLoad)
-  {
-	  double Py = data(0) * loadFactor;
-	  double Pz = data(1) * loadFactor;
+		// Fixed end forces in basic system
+		q0[0] -= N * aOverL;
+		double M1, M2;
+		M1 = -a * b2 * Py * L2;
+		M2 = a2 * b * Py * L2;
+		q0[1] += M1;
+		q0[2] += M2;
+		M1 = -a * b2 * Pz * L2;
+		M2 = a2 * b * Pz * L2;
+		q0[3] -= M1;
+		q0[4] -= M2;
+	}
+	else {
+		opserr << "ElasticBeam3d::addLoad()  -- load type unknown for element with tag: " << this->getTag() << endln;
+		return -1;
+	}
 
-	  double aOverL = data(2);
-	  //左侧三角形
-	  addGeneralPartialLoad(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
-	  //右侧三角形
-	  addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, aOverL, 1, L);
-
-	  //Monitor get Load
-	  addGeneralPartialLoadToMonitor(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
-	  //Monitor get Load
-	  addGeneralPartialLoadToMonitor(0, 0, Py, 0, Pz, 0, aOverL, 1, L);
-  }
-
-  //梯形荷载
-  //data[0]: Py
-  //data[1]: Pz
-  //data[2]: aOverL
-  //data[3]: bOverL
-  else if (type == LOAD_TAG_Beam3dTrapezoidLoad)
-  {
-	  double Py = data(0) * loadFactor;
-	  double Pz = data(1) * loadFactor;
-
-	  double aOverL = data(2);
-	  double bOverL = data(3);
-	  //左侧三角形
-	  addGeneralPartialLoad(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
-	  //中央三角形
-	  addGeneralPartialLoad(0, 0, Py, Py, Pz, Pz, aOverL, bOverL, L);
-	  //右侧三角形
-	  addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, bOverL, 1, L);
-
-	  //Monitor get Load
-	  addGeneralPartialLoadToMonitor(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
-	  //Monitor get Load
-	  addGeneralPartialLoadToMonitor(0, 0, Py, Py, Pz, Pz, aOverL, bOverL, L);
-	  //Monitor get Load
-	  addGeneralPartialLoadToMonitor(0, 0, Py, 0, Pz, 0, bOverL, 1, L);
-  }
-  else 
-  {
-    opserr << "ElasticBeam3d::addLoad()  -- load type unknown for element with tag: " << this->getTag() << endln;
-    return -1;
-  }
-
-  return 0;
+	return 0;
 }
 
 
