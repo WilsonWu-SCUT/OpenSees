@@ -244,7 +244,8 @@ TclTimeSeriesCommand(ClientData clientData,
 	if (endMarker != argc) {
 	  int pathSize;
 	  TCL_Char **pathStrings;
-	  
+
+
 	  if (Tcl_SplitList(interp, argv[endMarker], 
 			    &pathSize, &pathStrings) != TCL_OK) {
 		      
@@ -276,13 +277,15 @@ TclTimeSeriesCommand(ClientData clientData,
 	  int pathSize;
 	  TCL_Char **pathStrings;
 	  
-	  if (Tcl_SplitList(interp, argv[endMarker], 
-			    &pathSize, &pathStrings) != TCL_OK) {
-			
-	    opserr << "WARNING problem spltting time path " << argv[endMarker] << " - ";
-	    opserr << " Series -time {times} ... \n";
-	    return 0;
+	  if (Tcl_SplitList(interp, argv[endMarker],
+		  &pathSize, &pathStrings) != TCL_OK) {
+
+		  opserr << "WARNING problem spltting time path " << argv[endMarker] << " - ";
+		  opserr << " Series -time {times} ... \n";
+		  return 0;
 	  }
+
+	  
 	  
 	  dataTime = new Vector(pathSize);
 	  for (int i=0; i<pathSize; i++) {

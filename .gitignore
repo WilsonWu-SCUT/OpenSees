@@ -80,3 +80,5 @@ SRC/interpreter/tclInterpreter
 SRC/interpreter/openseespy
 SRC/interpreter/openseestcl
 /SRC/element/elasticBeamColumn/ElasticBeam3d - 副本.cpp
+/Win64/proj/optimization/x64/Release_2019
+/Win64/proj/recorder/x64/Release_2019
