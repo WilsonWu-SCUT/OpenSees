@@ -357,6 +357,12 @@ void Element::initialMonitorForce(void)
     deltaMonitorForce = new Matrix(6, monitorPos.size());
 }
 
+
+std::vector<double>& Element::getMonitorPos(void)
+{
+    return monitorPos;
+}
+
 const Vector &
 Element::getRayleighDampingForces(void) 
 {

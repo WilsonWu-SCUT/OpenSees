@@ -92,6 +92,7 @@ class Element : public DomainComponent
     virtual const Vector &getResistingForceIncInertia(void);     
     virtual const Matrix getMonitorForce(void);
     void initialMonitorForce(void);
+    std::vector<double>& getMonitorPos(void);
 
     // method for obtaining information specific to an element
     virtual Response *setResponse(const char **argv, int argc, 
