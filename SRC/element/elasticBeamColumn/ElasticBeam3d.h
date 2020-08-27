@@ -44,7 +44,7 @@ class Response;
 class Renderer;
 class SectionForceDeformation;
 
-#define Monitor_Point_Offset 0.01
+#define Monitor_Point_Offset 0.001
 
 class ElasticBeam3d : public Element
 {

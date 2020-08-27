@@ -41,7 +41,7 @@
 #include <ID.h>
 #include <vector>
 
-#define Monitor_Point_Dist_Tol 0.005
+#define Monitor_Point_Dist_Tol 0.0005
 
 class Matrix;
 class Vector;

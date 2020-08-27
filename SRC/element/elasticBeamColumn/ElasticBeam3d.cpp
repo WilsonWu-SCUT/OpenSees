@@ -837,6 +837,7 @@ ElasticBeam3d::addLoad(ElementalLoad *theLoad, double loadFactor)
       addPointLoad(data(2) * loadFactor, data(0) * loadFactor, data(1) * loadFactor, data(3), L);
       //Not to Set Monitor Load Then try push monitor load
       addMonitorPoint(data(3) - Monitor_Point_Offset);
+	  addMonitorPoint(data(3));
       addMonitorPoint(data(3) + Monitor_Point_Offset);
 	  //Monitor get Load
       addPointLoadToMonitor(data(2) * loadFactor, data(0) * loadFactor, data(1) * loadFactor, data(3), L);
