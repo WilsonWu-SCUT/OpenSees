@@ -84,10 +84,7 @@ void* OPS_PlaneStress()
 	}
 
 	return mat;
-}
 #endif // _SAP
-
-    
 }
 
 //full constructor

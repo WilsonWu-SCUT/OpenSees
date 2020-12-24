@@ -81,6 +81,7 @@ extern void *OPS_TDConcrete(void); // ntosic
 extern void *OPS_TDConcreteMC10(void); //ntosic
 extern void *OPS_TDConcreteMC10NL(void); //ntosic
 extern void *OPS_ElasticMaterial(void);
+extern void *OPS_AIDMMaterial(void);
 extern void *OPS_ElasticPPMaterial(void);
 extern void *OPS_EPPGapMaterial(void);
 extern void *OPS_ParallelMaterial(void);
@@ -264,6 +265,15 @@ TclModelBuilderUniaxialMaterialCommand (ClientData clientData, Tcl_Interp *inter
       else 
 	return TCL_ERROR;
 
+    }
+
+    else if (strcmp(argv[1], "AIDM") == 0) {
+
+        void* theMat = OPS_AIDMMaterial();
+        if (theMat != 0)
+            theMaterial = (UniaxialMaterial*)theMat;
+        else
+            return TCL_ERROR;
     }
 	
 	// SAJalali

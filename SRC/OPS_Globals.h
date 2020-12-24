@@ -48,7 +48,7 @@
 //extern OPS_Stream &opserr;
 extern OPS_Stream* opserrPtr;
 
-#define _SAP
+//#define _SAP
 
 #ifdef _SAP
 //#pragma warning(disable: 4101)

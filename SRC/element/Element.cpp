@@ -103,8 +103,8 @@ Element::~Element()
     delete [] previousK;
   }
 
-  if(deltaMonitorForce != 0)
-	  delete deltaMonitorForce;
+  //if(deltaMonitorForce != 0)
+	  //delete deltaMonitorForce;
 }
 
 int
@@ -348,8 +348,11 @@ const Matrix Element::getMonitorForce(void)
 void Element::initialMonitorForce(void)
 {
 	//No Monitor Point
-	if (monitorPos.size() == 0)
-		return;
+    if (monitorPos.size() == 0)
+    {
+        deltaMonitorForce = new Matrix(0, 0);
+        return;
+    }
 	//Delete Pointer
 	if (deltaMonitorForce != 0)
 		delete deltaMonitorForce;

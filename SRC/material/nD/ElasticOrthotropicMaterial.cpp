@@ -92,11 +92,8 @@ OPS_ElasticOrthotropicMaterial(void)
         dData[6], dData[7], dData[8], dData[9]);
 
     return theMaterial;
-}
 #endif // _SAP
 }
-
-  
 
 
 

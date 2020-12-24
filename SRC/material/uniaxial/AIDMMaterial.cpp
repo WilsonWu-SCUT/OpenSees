@@ -1,0 +1,551 @@
+/* ****************************************************************** **
+**    OpenSees - Open System for Earthquake Engineering Simulation    **
+**          Pacific Earthquake Engineering Research Center            **
+**                                                                    **
+**                                                                    **
+** (C) Copyright 1999, The Regents of the University of California    **
+** All Rights Reserved.                                               **
+**                                                                    **
+** Commercial use of this program without express permission of the   **
+** University of California, Berkeley, is strictly prohibited.  See   **
+** file 'COPYRIGHT'  in main directory for information on usage and   **
+** redistribution,  and for a DISCLAIMER OF ALL WARRANTIES.           **
+**                                                                    **
+** Developed by:                                                      **
+**   Frank McKenna (fmckenna@ce.berkeley.edu)                         **
+**   Gregory L. Fenves (fenves@ce.berkeley.edu)                       **
+**   Filip C. Filippou (filippou@ce.berkeley.edu)                     **
+**                                                                    **
+** ****************************************************************** */
+                                                                        
+// $Revision: 1.10 $
+// $Date: 2008-08-26 16:30:55 $
+// $Source: /usr/local/cvs/OpenSees/SRC/material/uniaxial/ElasticMaterial.cpp,v $
+                                                                        
+                                                                        
+// Written: fmk 
+// Created: 07/98
+// Revision: A
+//
+// Description: This file contains the class implementation for 
+// ElasticMaterial. 
+//
+// What: "@(#) ElasticMaterial.C, revA"
+
+#include <AIDMMaterial.h>
+#include <Vector.h>
+#include <Channel.h>
+#include <Information.h>
+#include <Parameter.h>
+#include <string.h>
+
+#include <OPS_Globals.h>
+
+#include <elementAPI.h>
+
+void *
+OPS_AIDMMaterial(void)
+{
+
+#ifdef _SAP
+    return nullptr;
+#else
+	// Pointer to a uniaxial material that will be returned
+	UniaxialMaterial* theMaterial = 0;
+
+	if (OPS_GetNumRemainingInputArgs() < 2) {
+		opserr << "Invalid #args,  want: uniaxialMaterial Elastic tag? E? <eta?> <Eneg?> ... " << endln;
+		return 0;
+	}
+
+	int iData[1];
+	double dData[6];
+	int numData = 1;
+	if (OPS_GetIntInput(&numData, iData) != 0) {
+		opserr << "WARNING invalid tag for uniaxialMaterial Elastic" << endln;
+		return 0;
+	}
+
+	numData = OPS_GetNumRemainingInputArgs();
+
+	if (numData >= 6) {
+		numData = 6;
+		if (OPS_GetDoubleInput(&numData, dData) != 0) {
+			opserr << "Invalid data for uniaxial Elastic " << iData[0] << endln;
+			return 0;
+		}
+	}
+	else {
+		numData = 1;
+		if (OPS_GetDoubleInput(&numData, dData) != 0) {
+			opserr << "Invalid data for uniaxialMaterial Elastic " << iData[0] << endln;
+			return 0;
+		}
+		dData[1] = 0.0;
+		dData[2] = dData[0];
+	}
+    if(numData == 6)
+        theMaterial = new AIDMMaterial(iData[0], dData[0], dData[1], dData[2], dData[3], dData[4], dData[5]);
+	// Parsing was successful, allocate the material
+	else theMaterial = new AIDMMaterial(iData[0], dData[0], dData[1]);
+	if (theMaterial == 0) {
+		opserr << "WARNING could not create uniaxialMaterial of type ElasticMaterial\n";
+		return 0;
+	}
+	return theMaterial;
+#endif // SAP
+}
+
+std::shared_ptr<KerasModel> AIDMMaterial::keras_SANN_sp(new KerasModel("AIDMBB.model"));
+std::shared_ptr<KerasModel> AIDMMaterial::keras_HANN_sp(new KerasModel("AIDMHY.model"));
+
+std::vector<double> AIDMMaterial::lammda_vec = { 0, 5, 1 };
+std::vector<double> AIDMMaterial::lammdaS_vec = { 0, 2, 0.6 };
+std::vector<double> AIDMMaterial::lammdaSV_vec = { 0, 0.3, 0.6 };
+std::vector<double> AIDMMaterial::lammdaT_vec = { 0, 6, 0.4 };
+std::vector<double> AIDMMaterial::strainC_vec = { 0, 0.06, 1 };
+std::vector<double> AIDMMaterial::stressFactor_vec = { 0.4, 1.3, 1 };
+std::vector<double> AIDMMaterial::m_vec = { 2, 9, 1 };
+std::vector<double> AIDMMaterial::n_vec = { 1, 8, 1 };
+std::vector<double> AIDMMaterial::secantK_vec = { 0, 5, 0.6 };
+std::vector<double> AIDMMaterial::afa_vec = { 0, 5, 1 };
+std::vector<double> AIDMMaterial::beta_vec = { 0, 3, 0.4 };
+std::vector<double> AIDMMaterial::gamma_vec = { 0, 1, 1 };
+std::vector<double> AIDMMaterial::eta_vec = { 0, 1, 6 };
+
+AIDMMaterial::AIDMMaterial(int tag, double e, double et)
+:UniaxialMaterial(tag, MAT_TAG_AIDMMaterial),
+    TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
+    K(0), CK(0.0),
+    m_pos(10), m_neg(10), n_pos(2), n_neg(2),
+    strainC_pos(0.002), strainC_neg(0.002), stressFactor_pos(1), stressFactor_neg(1),
+    stressSA_pos(60), stressSA_neg(60),
+    CstrainMax(0), CstrainMin(0),
+    afa_pos(1), afa_neg(1),
+    beta_pos(0.5), beta_neg(0.5),
+    gamma_pos(0.5), gamma_neg(0.5),
+    eta_pos(0.9), eta_neg(0.9)
+{
+}
+
+
+AIDMMaterial::AIDMMaterial(int tag, double lammda, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg)
+    :UniaxialMaterial(tag, MAT_TAG_AIDMMaterial),
+    TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0), 
+    K(0), CK(0.0),
+    stressSA_pos(Msa_pos), stressSA_neg(Msa_neg),
+    CstrainMax(0), CstrainMin(0),
+    lammda(lammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
+    needUpdateHANN_pos(false), needUpdateHANN_neg(false)
+{
+    this->updateSkeletonParams();
+}
+
+
+AIDMMaterial::AIDMMaterial()
+:UniaxialMaterial(0, MAT_TAG_AIDMMaterial),
+    TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
+    K(0),
+    m_pos(0), m_neg(0), n_pos(0), n_neg(0),
+    strainC_pos(0), strainC_neg(0), stressFactor_pos(0), stressFactor_neg(0),
+    stressSA_pos(0), stressSA_neg(0),
+    CstrainMax(0), CstrainMin(0),
+    afa_pos(1), afa_neg(1),
+    beta_pos(0.5), beta_neg(0.5),
+    gamma_pos(0.5), gamma_neg(0.5),
+    eta_pos(0.9), eta_neg(0.9)
+{
+
+}
+
+
+AIDMMaterial::~AIDMMaterial()
+{
+  // does nothing
+}
+
+int 
+AIDMMaterial::setTrialStrain(double strain, double strainRate)
+{
+    //if strain is equal
+    if(abs(CStrain - strain) > 1E-16)
+        loading_direct_pos = CStrain < strain;
+    //history maximum strain
+    auto max_strain = loading_direct_pos ? CstrainMax : CstrainMin;
+    //strain larger than history maximum value -> go on backbone
+    if ((loading_direct_pos ? strain >= max_strain : strain <= max_strain))
+    {
+        this->setTangentOnBackbone(strain, loading_direct_pos);
+        return 0;
+    }
+    //Unloading
+    else if (abs(strain) < abs(CStrain) && CStress * CStrain > 0)
+    {
+        auto info  = this->setUnloadingTangent(strain);
+        if(info == 0) return 0;
+    }
+    //Reload path not created
+    if (max_strain == 0)
+    {
+        this->setTangentOnBackbone(strain, loading_direct_pos);
+    }
+    else
+    {
+        this->setReloadingTangent(strain, loading_direct_pos);
+    }
+    return 0;
+}
+
+int 
+AIDMMaterial::setTrial(double strain, double &stress, double &tangent, double strainRate)
+{
+    this->setTrialStrain(strain, strainRate);
+    stress = TStress;
+    tangent = K;
+    return 0;
+}
+
+void AIDMMaterial::setTangentOnBackbone(const double& strain, bool loading_direct_pos)
+{
+    //Oriented Strain Stress
+    auto oriented_strain = backbone_inidStrainFactor * (loading_direct_pos > 0 ? strainC_pos : -strainC_neg);
+    //In same side
+    if ((loading_direct_pos ? strain >= 0 : strain <= 0))
+    {
+        oriented_strain = abs(oriented_strain) > abs(CStrain * backbone_ortStrainFactor) ?
+            oriented_strain : CStrain * backbone_ortStrainFactor;
+    }
+    // strain out of oriented
+    if((loading_direct_pos? oriented_strain < strain: oriented_strain > strain))
+        oriented_strain = strain;
+    auto oriented_stress = this->getStressOnBackbone(oriented_strain);
+    //Updating stiffness
+    if (oriented_strain - CStrain == 0) return;
+    K = (oriented_stress - CStress) / (oriented_strain - CStrain);
+    // Updating TStrain TStress
+    TStrain = strain;
+    TStress = CStress + K * (strain - CStrain);
+}
+
+int AIDMMaterial::setUnloadingTangent(const double& strain)
+{
+    //Update params
+    this->updateHystereticParams(strain > 0);
+    //Maximum unloading stiffness
+    auto min_unloading_K = CStress / CStrain;
+    //Caping secant stiffness
+    auto secant_Kc = CStress > 0 ? stressFactor_pos * stressSA_pos / strainC_pos :
+        stressFactor_neg * stressSA_neg / strainC_neg;
+    //Unloading stiffness
+    auto unloading_K = CStress > 0 ? secant_Kc * afa_pos : secant_Kc * afa_neg;
+    //Unloading stiffness is to rigid
+    K = unloading_K < min_unloading_K ? min_unloading_K : unloading_K;
+    //Updating TStrain TStress
+    if (strain - CStrain == 0) return 0;
+    auto stress = CStress + K * (strain - CStrain);
+    //is balance
+    if (stress * strain <= 0)
+        return -1;
+    TStrain = strain;
+    TStress = stress;
+    return 0;
+}
+
+void AIDMMaterial::setReloadingTangent(const double& strain, bool loading_direct_pos)
+{
+    //Update params
+    this->updateHystereticParams(loading_direct_pos);
+    //Maximum deformation
+    auto max_strain = loading_direct_pos ? CstrainMax : CstrainMin;
+    auto max_stress = loading_direct_pos ? CstressMaxCor : CStressMinCor;
+    //prk point capacity
+    auto brk_prt_stress = max_stress * (loading_direct_pos ? gamma_pos : gamma_neg);
+    //oriented point capacity
+    auto oreinted_prt_stress = max_stress * (loading_direct_pos ? eta_pos : eta_neg);
+    //Caping secant stiffness
+    auto secant_Kc = loading_direct_pos ? stressFactor_pos * stressSA_pos / strainC_pos :
+        stressFactor_neg * stressSA_neg / strainC_neg;
+    //break proint maxstress with sign
+    auto brk_prt_strain_max = max_strain - (oreinted_prt_stress - brk_prt_stress) / secant_Kc;
+    //towards to oriented prt:
+    bool isLargerthanBrkprtStress = loading_direct_pos ? CStress > brk_prt_stress: CStress < brk_prt_stress;
+    bool isbeyondBrkprtStrainMax = loading_direct_pos ? CStrain > brk_prt_strain_max : CStrain < brk_prt_strain_max;
+    bool isBrkprtBeyondOrientedPrt = abs(brk_prt_stress) > abs(oreinted_prt_stress);
+    //Oriented stiffness
+    auto reloadingB_K = (oreinted_prt_stress - CStress) / (max_strain - CStrain);
+    if (isLargerthanBrkprtStress || isbeyondBrkprtStrainMax || isBrkprtBeyondOrientedPrt)
+    {
+        if (max_strain - CStrain == 0) return;
+        K = reloadingB_K;
+    }
+    //maybe towards to break prt
+    else
+    {
+        //First reloading stiffness
+        auto reloadingA_K = loading_direct_pos ? secant_Kc * beta_pos : secant_Kc * beta_neg;
+        //Reloading target strain
+        auto reloadingA_strain = CStrain + (brk_prt_stress - CStress) / reloadingA_K;
+        bool isStrainBeyond = loading_direct_pos ? reloadingA_strain > brk_prt_strain_max: reloadingA_strain < brk_prt_strain_max;
+        if (isStrainBeyond && (max_strain - CStrain == 0))
+            return;
+        K = isStrainBeyond ? reloadingB_K : reloadingA_K;
+    }
+    // Updating TStrain TStress
+    TStrain = strain;
+    TStress = CStress + K * (strain - CStrain);
+    return;
+}
+
+std::vector<double>& AIDMMaterial::getRegularizedValueVector(const AIDMParamEnum& type)
+{
+    switch (type)
+    {
+    case AIDMParamEnum::Lammda: return AIDMMaterial::lammda_vec;
+    case AIDMParamEnum::LammdaS: return AIDMMaterial::lammdaS_vec;
+    case AIDMParamEnum::LammdaSV: return AIDMMaterial::lammdaSV_vec;
+    case AIDMParamEnum::LammdaT: return AIDMMaterial::lammdaT_vec;
+
+    case AIDMParamEnum::StressFactor: return AIDMMaterial::stressFactor_vec;
+    case AIDMParamEnum::StrainC: return AIDMMaterial::strainC_vec;
+    case AIDMParamEnum::m: return AIDMMaterial::m_vec;
+    case AIDMParamEnum::n: return AIDMMaterial::n_vec;
+
+    case AIDMParamEnum::SecantK: return AIDMMaterial::secantK_vec;
+
+    case AIDMParamEnum::Afa: return AIDMMaterial::afa_vec;
+    case AIDMParamEnum::Beta: return AIDMMaterial::beta_vec;
+    case AIDMParamEnum::Gamma: return AIDMMaterial::gamma_vec;
+    case AIDMParamEnum::Eta: return AIDMMaterial::eta_vec;
+
+    default: return AIDMMaterial::secantK_vec;
+    }
+}
+
+float AIDMMaterial::getRegularizedValue(const double& value, const AIDMParamEnum& type)
+{
+    auto& vec = this->getRegularizedValueVector(type);
+    return pow((value - vec[0]) / (vec[1] - vec[0]), vec[2]);
+}
+
+float AIDMMaterial::getNormalValue(const double& value, const AIDMParamEnum& type)
+{
+    if (type == AIDMParamEnum::Afa || type == AIDMParamEnum::Beta ||
+        type == AIDMParamEnum::Gamma || type == AIDMParamEnum::Eta)
+    {
+        if (value < 0) return 0.001;
+    }
+    auto& vec = getRegularizedValueVector(type);
+    auto powValue = pow(value, 1 / vec[2]);
+    auto normalValue =  powValue * (vec[1] - vec[0]) + vec[0];
+    if (type == AIDMParamEnum::m || type == AIDMParamEnum::n)
+    {
+        normalValue = normalValue > 1 ? normalValue : 1.5;
+    }
+    else if (type == AIDMParamEnum::Afa || type == AIDMParamEnum::Beta)
+    {
+        if (value < 0) return 0.001;
+    }
+
+    else if (type == AIDMParamEnum::Gamma || type == AIDMParamEnum::Eta)
+    {
+        if (value < 0) return 0.001;
+        else if (value > 1) 
+            return 1;
+    }
+
+    return normalValue;
+}
+
+std::vector<float> AIDMMaterial::getComponentParamsVec(bool is_pos)
+{
+    std::vector<float> vec = {};
+    auto lammda_reg = this->getRegularizedValue(lammda, AIDMParamEnum::Lammda);
+    auto lammdas_reg = this->getRegularizedValue(lammdaS, AIDMParamEnum::LammdaS);
+    auto lammdasv_reg = this->getRegularizedValue(lammdaSV, AIDMParamEnum::LammdaSV);
+    auto lammdat_reg = this->getRegularizedValue(is_pos? lammdaT_pos : 1/ lammdaT_pos, AIDMParamEnum::LammdaT);
+    return { lammda_reg, lammdas_reg,  lammdasv_reg, lammdat_reg };
+}
+
+void AIDMMaterial::updateSkeletonParams()
+{
+    //Input params
+    auto& componentParamvec_pos = this->getComponentParamsVec(true);
+    auto& componentParamvec_neg = this->getComponentParamsVec(false);
+    //Predict
+    auto& outputParams_pos = AIDMMaterial::keras_SANN_sp->predict(componentParamvec_pos);
+    auto& outputParams_neg = AIDMMaterial::keras_SANN_sp->predict(componentParamvec_neg);
+    //Getvalue
+    m_pos = this->getNormalValue(outputParams_pos[0], AIDMParamEnum::m);
+    n_pos = this->getNormalValue(outputParams_pos[1], AIDMParamEnum::n);
+    strainC_pos = this->getNormalValue(outputParams_pos[2], AIDMParamEnum::StrainC);
+    stressFactor_pos = this->getNormalValue(outputParams_pos[3], AIDMParamEnum::StressFactor);
+    m_neg = this->getNormalValue(outputParams_neg[0], AIDMParamEnum::m);
+    n_neg = this->getNormalValue(outputParams_neg[1], AIDMParamEnum::n);
+    strainC_neg = this->getNormalValue(outputParams_neg[2], AIDMParamEnum::StrainC);
+    stressFactor_neg = this->getNormalValue(outputParams_neg[3], AIDMParamEnum::StressFactor);
+}
+
+void AIDMMaterial::updateHystereticParams(bool is_pos)
+{
+    //is need to update
+    if ((is_pos ? !needUpdateHANN_pos : !needUpdateHANN_neg))
+        return;
+    //Caping secant stiffness
+    auto secant_Kc = is_pos ? stressFactor_pos * stressSA_pos / strainC_pos :
+        stressFactor_neg * stressSA_neg / strainC_neg;
+    //Input params
+    auto secantK = is_pos ? CstressMaxCor / CstrainMax : CStressMinCor / CstrainMin;
+    auto secantKFactor = this->getRegularizedValue(secantK / secant_Kc, AIDMParamEnum::SecantK);
+    auto& componentParamvec = this->getComponentParamsVec(is_pos);
+    componentParamvec.push_back(secantKFactor);
+    //Predict
+    auto& outputParams = AIDMMaterial::keras_HANN_sp->predict(componentParamvec);
+    //Getvalue
+    if (is_pos)
+    {
+        afa_pos = this->getNormalValue(outputParams[0], AIDMParamEnum::Afa);
+        beta_pos = this->getNormalValue(outputParams[1], AIDMParamEnum::Beta);
+        gamma_pos = this->getNormalValue(outputParams[2], AIDMParamEnum::Gamma);
+        eta_pos = this->getNormalValue(outputParams[3], AIDMParamEnum::Eta);
+        needUpdateHANN_pos = false;
+    }
+    else
+    {
+        afa_neg = this->getNormalValue(outputParams[0], AIDMParamEnum::Afa);
+        beta_neg = this->getNormalValue(outputParams[1], AIDMParamEnum::Beta);
+        gamma_neg = this->getNormalValue(outputParams[2], AIDMParamEnum::Gamma);
+        eta_neg = this->getNormalValue(outputParams[3], AIDMParamEnum::Eta);
+        needUpdateHANN_neg = false;
+    }
+}
+
+double 
+AIDMMaterial::getStress(void)
+{
+    return TStress;
+}
+
+
+double 
+AIDMMaterial::getTangent(void)
+{
+    return K;
+}
+
+
+double 
+AIDMMaterial::getInitialTangent(void)
+{
+    auto pos_dStrain = this->backbone_inidStrainFactor * strainC_pos;
+    auto neg_dStrain = this->backbone_inidStrainFactor * strainC_neg;
+    auto K0_pos = this->getStressOnBackbone(pos_dStrain) / pos_dStrain;
+    auto K0_neg = this->getStressOnBackbone(-neg_dStrain) / (-neg_dStrain);
+    return K0_pos > K0_neg ? K0_pos : K0_neg;
+}
+
+
+int 
+AIDMMaterial::commitState(void)
+{
+    CStrain = TStrain;
+    CStress = TStress;
+    CK = K;
+    //Record Maxmum deformation
+    if (CStrain > 0)
+    {
+        if (abs(CstrainMax) > abs(CStrain) || abs(CStrain) < backbone_inidStrainFactor * strainC_pos)
+            return 0;
+        CstrainMax = CStrain;
+        CstressMaxCor = CStress;
+        needUpdateHANN_pos = true;
+    }
+    else
+    {
+        if (abs(CstrainMin) > abs(CStrain) || abs(CStrain) < backbone_inidStrainFactor * strainC_neg)
+            return 0;
+        CstrainMin = CStrain;
+        CStressMinCor = CStress;
+        needUpdateHANN_neg = true;
+    }
+    return 0;
+}
+
+
+int 
+AIDMMaterial::revertToLastCommit(void)
+{
+    TStrain = CStrain;
+    TStress = CStress;
+    K = CK;
+    return 0;
+}
+
+
+int 
+AIDMMaterial::revertToStart(void)
+{
+    TStrain = 0.0;
+    TStress = 0.0;
+    return 0;
+}
+
+
+UniaxialMaterial *
+AIDMMaterial::getCopy(void)
+{
+    AIDMMaterial*theCopy = new AIDMMaterial(this->getTag(), lammda, lammdaS, lammdaSV, lammdaT_pos, stressSA_pos, stressSA_neg);
+    theCopy->TStrain = TStrain;
+    theCopy->CStress = CStress;
+    theCopy->CStrain = CStrain;
+    theCopy->TStress = TStress;
+    return theCopy;
+}
+
+
+int 
+AIDMMaterial::sendSelf(int cTag, Channel &theChannel)
+{
+    opserr << "AIDMMaterial::sendSelf() - failed to send data\n";
+    return -1;
+}
+
+
+int 
+AIDMMaterial::recvSelf(int cTag, Channel &theChannel,
+			  FEM_ObjectBroker &theBroker)
+{
+    opserr << "AIDMMaterial::recvSelf() - failed to receive data\n";
+    return -1;
+}
+
+
+void 
+AIDMMaterial::Print(OPS_Stream &s, int flag)
+{
+	opserr << "AIDMMaterial::Print() - failed to print\n";
+}
+
+
+int
+AIDMMaterial::setParameter(const char **argv, int argc, Parameter &param)
+{
+  return -1;
+}
+
+int 
+AIDMMaterial::updateParameter(int parameterID, Information &info)
+{
+    return -1;
+}
+
+double AIDMMaterial::getStressOnBackbone(const double& drift)
+{
+    auto m = drift > 0 ? m_pos : m_neg;
+    auto n = drift > 0 ? n_pos : n_neg;
+    auto dc = drift > 0 ? strainC_pos : strainC_neg;
+    auto capacity = drift > 0 ? stressFactor_pos * stressSA_pos : stressFactor_neg * stressSA_neg;
+    auto x = abs(drift / dc);
+    auto y = (m * x) / (1 + (m - (n / (n - 1))) * x + pow(x, n) / (n - 1));
+    return drift > 0? y * capacity : -y * capacity;
+}
+
