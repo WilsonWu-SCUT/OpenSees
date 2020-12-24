@@ -71,37 +71,35 @@ void AIDMBeamColumn::setStiffMatrix(const double& L)
 	kb(5, 5) = GJoverL;
 
 	//Only considering around y-axis rotation
-	lumped_f_y(0, 0) = 1 / EIyoverL3 + 1 / AIDMs[0]->getTangent();
-	lumped_f_y(0, 1) = lumped_f_y(1, 0) = -1 / (EIyoverL3 * 2);
-	lumped_f_y(1, 1) = 1 / EIyoverL3 + 1 / AIDMs[1]->getTangent();
-	//Invert flexible matrix
-	if (lumped_f_y.Solve(I, lumped_k_y) < 0)
-		opserr << "AIDMBeamColumn::setStiffMatrix() -- could not invert flexibility";
+	//lumped_f_y(0, 0) = 1 / EIyoverL3 + 1 / AIDMs[0]->getTangent();
+	//lumped_f_y(0, 1) = lumped_f_y(1, 0) = -1 / (EIyoverL3 * 2);
+	//lumped_f_y(1, 1) = 1 / EIyoverL3 + 1 / AIDMs[1]->getTangent();
+	////Invert flexible matrix
+	//if (lumped_f_y.Solve(I, lumped_k_y) < 0)
+	//	opserr << "AIDMBeamColumn::setStiffMatrix() -- could not invert flexibility";
 	//Form basic stiffness matrix
 	kb(1, 1) = kb(2, 2) = EIzoverL4;
 	kb(2, 1) = kb(1, 2) = EIzoverL2;
+	kb(3, 3) = AIDMs[0]->getTangent();
+	kb(4, 4) = AIDMs[1]->getTangent();
 
 	//kb(3, 3) = kb(4, 4) = EIyoverL4;
 	//kb(4, 3) = kb(3, 4) = EIyoverL2;
-	kb(3, 3) = AIDMs[0]->getTangent();
+	
 	//kb(3, 3) = lumped_k_y(0, 0);
 	//kb(4, 3) = kb(3, 4) = lumped_k_y(0, 1);
 	
-
-	kb(4, 4) = AIDMs[1]->getTangent();
 	//kb(4, 4) = lumped_k_y(1, 1);
 
-	if (kb(3, 3) == 0)
-	{
-		opserr << "TEST\n";
-	}
+	//if (kb(3, 3) == 0)
+	//{
+	//	opserr << "TEST\n";
+	//}
 
-	if (kb(4, 4) < 0)
-	{
-		opserr << "TEST\n";
-	}
-
-	AIDM_k_i = AIDMs[0]->getTangent();
+	//if (kb(4, 4) < 0)
+	//{
+	//	opserr << "TEST\n";
+	//}
 
 	////不释放
 	//if (MRelease == 0)
@@ -149,8 +147,9 @@ void AIDMBeamColumn::setBasicForce(const double& L, const Vector& v)
 	//q(4) = EIyoverL2 * v(3) + EIyoverL4 * v(4);
 	q(3) = AIDMs[0]->getStress();
 		
-		//lumped_k_y(0, 0) * v(3) + lumped_k_y(0, 1) * v(4);
-	q(4) = AIDMs[1]->getStress(); //lumped_k_y(0, 1) * v(3) + lumped_k_y(1, 1) * v(4);
+	//lumped_k_y(0, 0) * v(3) + lumped_k_y(0, 1) * v(4);
+	//lumped_k_y(0, 1) * v(3) + lumped_k_y(1, 1) * v(4);
+	q(4) = AIDMs[1]->getStress(); 
 
 
 
@@ -249,61 +248,6 @@ void AIDMBeamColumn::addGeneralPartialLoad(const double& Ni, const double& Nj, c
 	}
 }
 
-void AIDMBeamColumn::addPointLoadToMonitor(const double& N, const double& Py, const double& Pz, const double& aOverL, const double& L)
-{
-	if (!Element::isSetMonitorForce || monitorPos.size() == 0)
-		return;
-	//Monitor Delta Length
-	auto prtNum = monitorPos.size();
-	//Target Point Position
-	auto targetPos = aOverL * L;
-	//For each the monitor point of the element
-	for (int prtInex = 0; prtInex < prtNum; prtInex++)
-	{
-		auto presentMonitorPos = monitorPos[prtInex] * L;
-		//Whether is the target point or not
-		if (presentMonitorPos > targetPos)
-		{
-			//Obtain the deltaForce in local axis
-
-			// Axial
-			(*deltaMonitorForce)(0, prtInex) += N;
-			// Moments about z and shears along y
-			(*deltaMonitorForce)(1, prtInex) += Py;
-			(*deltaMonitorForce)(5, prtInex) += Py * (presentMonitorPos - targetPos);
-			// Moments about y and shears along z
-			(*deltaMonitorForce)(2, prtInex) += Pz;
-			(*deltaMonitorForce)(4, prtInex) += Pz * (presentMonitorPos - targetPos);
-			break;;
-		}
-	}
-}
-
-void AIDMBeamColumn::addGeneralPartialLoadToMonitor(const double& Ni, const double& Nj, const double& Pyi, const double& Pyj,
-	const double& Pzi, const double& Pzj, const double& aOverL, const double& bOverL, const double& L)
-{
-	if (!Element::isSetMonitorForce)
-		return;
-	//拆分基本长度
-	double deltaLengthFactor = 1E-6;
-	double lengthFactor = deltaLengthFactor * L;
-	//调换位置
-	double minOverL = aOverL <= bOverL ? aOverL : bOverL;
-	double maxOverL = aOverL <= bOverL ? bOverL : aOverL;
-	//距离
-	double distOverL = maxOverL - minOverL;
-	//从左到右开始遍历
-	for (double overL = deltaLengthFactor / 2; overL <= distOverL; overL += deltaLengthFactor)
-	{
-		double Py = ((Pyj - Pyi) / distOverL * overL + Pyi) * lengthFactor;
-		double Pz = ((Pzj - Pzi) / distOverL * overL + Pzi) * lengthFactor;
-		double N = ((Nj - Ni) / distOverL * overL + Ni) * lengthFactor;
-		double targetX = minOverL + overL;
-		//添加节点荷载
-		addPointLoadToMonitor(N, Py, Pz, targetX, L);
-	}
-}
-
 Matrix AIDMBeamColumn::K(12, 12);
 Vector AIDMBeamColumn::P(12);
 Matrix AIDMBeamColumn::kb(6, 6);
@@ -374,10 +318,10 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
 	:Element(tag, ELE_TAG_AIDMBeamColumn),
 	A(A), E(E), G(G), Jx(Jx), Iy(Iy), Iz(Iz),
 	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0),
-	numAIDMs(numAidms), stress_i_1(0), stress_i(0), strain_i_1(0)
+	numAIDMs(numAidms)
 {
 	// allocate memory for numMaterials1d uniaxial material models
-	AIDMs = new UniaxialMaterial * [numAidms];
+	AIDMs = new AIDMMaterial * [numAidms];
 
 	connectedExternalNodes(0) = Nd1;
 	connectedExternalNodes(1) = Nd2;
@@ -414,15 +358,14 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
 
 	// get a copy of the material objects and check we obtained a valid copy
 	for (int i = 0; i < numAIDMs; i++) {
-		//AIDMs[i] = dynamic_cast<AIDMMaterial*>(aidms[i]->getCopy());
-		AIDMs[i] = (aidms[i]->getCopy());
+		AIDMs[i] = dynamic_cast<AIDMMaterial*>(aidms[i]->getCopy());
+		//AIDMs[i] = (aidms[i]->getCopy());
 		if (AIDMs[i] == 0) {
 			opserr << "AIDMBeamColumn::AIDMBeamColumn - failed to get a copy of material " << aidms[i]->getTag() << endln;
 			exit(-1);
 		}
 	}
 }
-
 
 AIDMBeamColumn::AIDMBeamColumn()
 	:Element(0, ELE_TAG_AIDMBeamColumn),
@@ -614,14 +557,12 @@ AIDMBeamColumn::setDomain(Domain* theDomain)
 int
 AIDMBeamColumn::commitState()
 {
+	//Ger local resist force
+	auto& F = this->getLocalResistingForce();
+	//Calculate Shear Span
+	this->AIDMs[0]->setLammda(F(4) / F(2));
+	this->AIDMs[1]->setLammda(F(10) / F(8));
 	int retVal = 0;
-
-	Cstress_i_1 = stress_i_1;
-	Cstress_i = stress_i;
-	CAIDM_k_i = AIDM_k_i;
-	Cstrain_i_1 = strain_i_1;
-
-
 	// call element commitState to do any base class stuff
 	if ((retVal = this->Element::commitState()) != 0) {
 		opserr << "ElasticBeam3d::commitState () - failed in base class";
@@ -638,11 +579,6 @@ AIDMBeamColumn::commitState()
 int
 AIDMBeamColumn::revertToLastCommit()
 {
-	stress_i_1 = Cstress_i_1;
-	stress_i = Cstress_i;
-	AIDM_k_i = CAIDM_k_i;
-	strain_i_1 = Cstrain_i_1;
-
 	int retVal = theCoordTransf->revertToLastCommit();
 	//AIDM CommitState
 	for (int i = 0; i < numAIDMs; i++)
@@ -792,8 +728,6 @@ AIDMBeamColumn::addLoad(ElementalLoad *theLoad, double loadFactor)
       {
 		  // Nothing to do
 	  }
-      //Monitor get Load
-      addGeneralPartialLoadToMonitor(wx, wx, wy, wy, wz, wz, 0, 1, L);
   }
   else if (type == LOAD_TAG_Beam3dPartialUniformLoad) {
 	  double wa = data(2) * loadFactor;  // Axial
@@ -865,8 +799,6 @@ AIDMBeamColumn::addLoad(ElementalLoad *theLoad, double loadFactor)
 	  double bOverL = data(7);
 
 	  addGeneralPartialLoad(Ni, Nj, Pyi, Pyj, Pzi, Pzj, aOverL, bOverL, L);
-	  //Monitor get Load
-	  addGeneralPartialLoadToMonitor(Ni, Nj, Pyi, Pyj, Pzi, Pzj, aOverL, bOverL, L);
   }
 
   //三角形荷载
@@ -883,11 +815,6 @@ AIDMBeamColumn::addLoad(ElementalLoad *theLoad, double loadFactor)
 	  addGeneralPartialLoad(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
 	  //右侧三角形
 	  addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, aOverL, 1, L);
-
-	  //Monitor get Load
-	  addGeneralPartialLoadToMonitor(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
-	  //Monitor get Load
-	  addGeneralPartialLoadToMonitor(0, 0, Py, 0, Pz, 0, aOverL, 1, L);
   }
 
   //梯形荷载
@@ -908,13 +835,6 @@ AIDMBeamColumn::addLoad(ElementalLoad *theLoad, double loadFactor)
 	  addGeneralPartialLoad(0, 0, Py, Py, Pz, Pz, aOverL, bOverL, L);
 	  //右侧三角形
 	  addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, bOverL, 1, L);
-
-	  //Monitor get Load
-	  addGeneralPartialLoadToMonitor(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
-	  //Monitor get Load
-	  addGeneralPartialLoadToMonitor(0, 0, Py, Py, Pz, Pz, aOverL, bOverL, L);
-	  //Monitor get Load
-	  addGeneralPartialLoadToMonitor(0, 0, Py, 0, Pz, 0, bOverL, 1, L);
   }
   else 
   {
@@ -944,60 +864,11 @@ AIDMBeamColumn::getResistingForceIncInertia()
 	return P;
 }
 
-const Matrix AIDMBeamColumn::getMonitorForce(void)
-{
-	double L = theCoordTransf->getInitialLength();
-	auto monitorNum = deltaMonitorForce->noCols();
-	Matrix forceMatrix(6, monitorNum + 1);
-	auto& localForce = this->getLocalResistingForce();
-	//Get the force In I
-	for (int i = 0; i < 6; i++)
-		forceMatrix(i, 0) = localForce(i);
-	//Get the force In each Section
-	for (int colIndex = 1; colIndex < monitorNum + 1; colIndex++)
-	{
-		auto deltaLengthFactor = colIndex == 1 ?
-			monitorPos[0] : monitorPos[colIndex - 1] - monitorPos[colIndex - 2];
-		for (int rowIndex = 0; rowIndex < 6; rowIndex++)
-		{
-			forceMatrix(rowIndex, colIndex) =
-				forceMatrix(rowIndex, colIndex - 1) + (*deltaMonitorForce)(rowIndex, colIndex - 1);
-			//Moment Cause By endForce
-			if (rowIndex == 4)
-			{
-				forceMatrix(rowIndex, colIndex) += forceMatrix(2, colIndex - 1) * deltaLengthFactor * L;
-			}
-			else if (rowIndex == 5)
-			{
-				forceMatrix(rowIndex, colIndex) += forceMatrix(1, colIndex - 1) * deltaLengthFactor * L;
-			}
-		}
-
-	}
-	return forceMatrix;
-}
-
 const Vector&
 AIDMBeamColumn::getResistingForce()
 {
-	//double L = theCoordTransf->getInitialLength();
-	//// Get basic deformations
-	//const Vector& v = theCoordTransf->getBasicTrialDisp();
-	//setBasicForce(L, v);
-
-	//q(0) += q0[0];
-	//q(1) += q0[1];
-	//q(2) += q0[2];
-	//q(3) += q0[3];
-	//q(4) += q0[4];
-
 	Vector p0Vec(p0, 5);
-
-	//  opserr << q;
-
-	P = theCoordTransf->getGlobalResistingForce(q, p0Vec);
-
-	return P;
+	return theCoordTransf->getGlobalResistingForce(q, p0Vec);
 }
 
 

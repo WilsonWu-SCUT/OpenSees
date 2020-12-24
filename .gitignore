@@ -143,3 +143,6 @@ SRC/interpreter/openseestcl
 /Win64/proj/openSees/TEST4.tcl
 /Win64/proj/tcl/x64/Release_2019/tcl.tlog
 /Win64/proj/tcl/x64/Release_2019
+/Win64/proj/openSees/GM1
+/Win64/proj/openSees/GroundMotion
+/Win64/proj/openSees

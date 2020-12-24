@@ -92,7 +92,6 @@ class AIDMBeamColumn : public Element
     const Vector &getResistingForce(void);
     const Vector& getLocalResistingForce(void);
     const Vector &getResistingForceIncInertia(void);            
-    const Matrix getMonitorForce(void) override;
     
     int sendSelf(int commitTag, Channel &theChannel);
     int recvSelf(int commitTag, Channel &theChannel, FEM_ObjectBroker &theBroker);
@@ -114,15 +113,11 @@ private:
 	void addGeneralPartialLoad(const double& Ni, const double& Nj, const double& Pyi,
 		const double& Pyj, const double& Pzi, const double& Pzj,
 		const double& aOverL, const double& bOverL, const double& length);
-    void addPointLoadToMonitor(const double& N, const double& Py, const double& Pz, const double& aOverL, const double& L);
-	void addGeneralPartialLoadToMonitor(const double& Ni, const double& Nj, const double& Pyi,
-		const double& Pyj, const double& Pzi, const double& Pzj,
-		const double& aOverL, const double& bOverL, const double& length);
 
   private:
     double A,E,G,Jx,Iy,Iz;
 
-    UniaxialMaterial** AIDMs;
+    AIDMMaterial** AIDMs;
     int numAIDMs;
 
     static Matrix K;
@@ -147,17 +142,6 @@ private:
     ID  connectedExternalNodes;    
 
     CrdTransf *theCoordTransf;
-
-    private:
-        double stress_i_1;
-        double stress_i;
-        double AIDM_k_i;
-        double strain_i_1;
-
-        double Cstress_i_1;
-        double Cstress_i;
-        double CAIDM_k_i;
-        double Cstrain_i_1;
 };
 
 #endif

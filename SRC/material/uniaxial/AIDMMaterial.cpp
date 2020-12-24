@@ -59,7 +59,7 @@ OPS_AIDMMaterial(void)
 	}
 
 	int iData[1];
-	double dData[6];
+	double dData[7];
 	int numData = 1;
 	if (OPS_GetIntInput(&numData, iData) != 0) {
 		opserr << "WARNING invalid tag for uniaxialMaterial Elastic" << endln;
@@ -68,26 +68,24 @@ OPS_AIDMMaterial(void)
 
 	numData = OPS_GetNumRemainingInputArgs();
 
-	if (numData >= 6) {
-		numData = 6;
+	if (numData >= 7) {
+		numData = 7;
 		if (OPS_GetDoubleInput(&numData, dData) != 0) {
 			opserr << "Invalid data for uniaxial Elastic " << iData[0] << endln;
 			return 0;
 		}
 	}
 	else {
-		numData = 1;
-		if (OPS_GetDoubleInput(&numData, dData) != 0) {
-			opserr << "Invalid data for uniaxialMaterial Elastic " << iData[0] << endln;
-			return 0;
-		}
-		dData[1] = 0.0;
-		dData[2] = dData[0];
+        numData = 6;
+        if (OPS_GetDoubleInput(&numData, dData) != 0) {
+            opserr << "Invalid data for uniaxial Elastic " << iData[0] << endln;
+            return 0;
+        }
 	}
-    if(numData == 6)
-        theMaterial = new AIDMMaterial(iData[0], dData[0], dData[1], dData[2], dData[3], dData[4], dData[5]);
+    if(numData == 7)
+        theMaterial = new AIDMMaterial(iData[0], dData[0], dData[1], dData[2], dData[3], dData[4], dData[5], dData[6]);
 	// Parsing was successful, allocate the material
-	else theMaterial = new AIDMMaterial(iData[0], dData[0], dData[1]);
+	else theMaterial = new AIDMMaterial(iData[0], dData[0], dData[1], dData[2], dData[3], dData[4], dData[5]);
 	if (theMaterial == 0) {
 		opserr << "WARNING could not create uniaxialMaterial of type ElasticMaterial\n";
 		return 0;
@@ -113,30 +111,29 @@ std::vector<double> AIDMMaterial::beta_vec = { 0, 3, 0.4 };
 std::vector<double> AIDMMaterial::gamma_vec = { 0, 1, 1 };
 std::vector<double> AIDMMaterial::eta_vec = { 0, 1, 6 };
 
-AIDMMaterial::AIDMMaterial(int tag, double e, double et)
+AIDMMaterial::AIDMMaterial(int tag, double height, double width, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg)
 :UniaxialMaterial(tag, MAT_TAG_AIDMMaterial),
-    TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
-    K(0), CK(0.0),
-    m_pos(10), m_neg(10), n_pos(2), n_neg(2),
-    strainC_pos(0.002), strainC_neg(0.002), stressFactor_pos(1), stressFactor_neg(1),
-    stressSA_pos(60), stressSA_neg(60),
-    CstrainMax(0), CstrainMin(0),
-    afa_pos(1), afa_neg(1),
-    beta_pos(0.5), beta_neg(0.5),
-    gamma_pos(0.5), gamma_neg(0.5),
-    eta_pos(0.9), eta_neg(0.9)
+TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
+K(0), CK(0.0),
+stressSA_pos(Msa_pos), stressSA_neg(Msa_neg),
+CstrainMax(0), CstrainMin(0),
+lammda(initialLammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
+needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(height),
+afa_pos(0.0), afa_neg(0.0)
 {
+    this->updateSkeletonParams();
 }
 
 
 AIDMMaterial::AIDMMaterial(int tag, double lammda, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg)
     :UniaxialMaterial(tag, MAT_TAG_AIDMMaterial),
-    TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0), 
+    TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
     K(0), CK(0.0),
     stressSA_pos(Msa_pos), stressSA_neg(Msa_neg),
     CstrainMax(0), CstrainMin(0),
     lammda(lammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
-    needUpdateHANN_pos(false), needUpdateHANN_neg(false)
+    needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(0.0),
+    afa_pos(0.0), afa_neg(0.0)
 {
     this->updateSkeletonParams();
 }
@@ -207,6 +204,8 @@ AIDMMaterial::setTrial(double strain, double &stress, double &tangent, double st
 
 void AIDMMaterial::setTangentOnBackbone(const double& strain, bool loading_direct_pos)
 {
+    //Update params
+    this->updateSkeletonParams();
     //Oriented Strain Stress
     auto oriented_strain = backbone_inidStrainFactor * (loading_direct_pos > 0 ? strainC_pos : -strainC_neg);
     //In same side
@@ -275,7 +274,8 @@ void AIDMMaterial::setReloadingTangent(const double& strain, bool loading_direct
     auto reloadingB_K = (oreinted_prt_stress - CStress) / (max_strain - CStrain);
     if (isLargerthanBrkprtStress || isbeyondBrkprtStrainMax || isBrkprtBeyondOrientedPrt)
     {
-        if (max_strain - CStrain == 0) return;
+        if (max_strain - CStrain == 0) 
+            return;
         K = reloadingB_K;
     }
     //maybe towards to break prt
@@ -368,6 +368,8 @@ std::vector<float> AIDMMaterial::getComponentParamsVec(bool is_pos)
 
 void AIDMMaterial::updateSkeletonParams()
 {
+    //Upadte Backbone curves
+    if (!needUpdateBANN) return;
     //Input params
     auto& componentParamvec_pos = this->getComponentParamsVec(true);
     auto& componentParamvec_neg = this->getComponentParamsVec(false);
@@ -383,6 +385,7 @@ void AIDMMaterial::updateSkeletonParams()
     n_neg = this->getNormalValue(outputParams_neg[1], AIDMParamEnum::n);
     strainC_neg = this->getNormalValue(outputParams_neg[2], AIDMParamEnum::StrainC);
     stressFactor_neg = this->getNormalValue(outputParams_neg[3], AIDMParamEnum::StressFactor);
+    needUpdateBANN = false;
 }
 
 void AIDMMaterial::updateHystereticParams(bool is_pos)
@@ -450,6 +453,7 @@ AIDMMaterial::commitState(void)
     CStrain = TStrain;
     CStress = TStress;
     CK = K;
+    Clammda = lammda;
     //Record Maxmum deformation
     if (CStrain > 0)
     {
@@ -477,6 +481,7 @@ AIDMMaterial::revertToLastCommit(void)
     TStrain = CStrain;
     TStress = CStress;
     K = CK;
+    lammda = Clammda;
     return 0;
 }
 
@@ -486,6 +491,8 @@ AIDMMaterial::revertToStart(void)
 {
     TStrain = 0.0;
     TStress = 0.0;
+    K = 0.0;
+    lammda = initialLammda;
     return 0;
 }
 
@@ -498,6 +505,9 @@ AIDMMaterial::getCopy(void)
     theCopy->CStress = CStress;
     theCopy->CStrain = CStrain;
     theCopy->TStress = TStress;
+    theCopy->CK = CK;
+    theCopy->Clammda = Clammda;
+    theCopy->sectionHeight = sectionHeight;
     return theCopy;
 }
 
@@ -536,6 +546,26 @@ int
 AIDMMaterial::updateParameter(int parameterID, Information &info)
 {
     return -1;
+}
+
+void AIDMMaterial::setLammda(const double& shearSpan)
+{
+    auto Lammda = abs(shearSpan) / this->sectionHeight;
+    if (Lammda < 0.5 || Lammda > 5)
+    {
+        int i = 1;
+    }
+    Lammda = Lammda < 0.5 ? 0.5 : Lammda;
+    Lammda = Lammda > 5 ? 5 : Lammda;
+    if (abs(this->lammda - Lammda) > 0.5)
+    {
+        this->lammda = Lammda;
+        needUpdateBANN = true;
+        if(CstrainMax != 0)
+            needUpdateHANN_pos = true;
+        if(CstrainMin != 0)
+            needUpdateHANN_neg = true;
+    }
 }
 
 double AIDMMaterial::getStressOnBackbone(const double& drift)

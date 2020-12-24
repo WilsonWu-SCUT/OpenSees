@@ -63,7 +63,7 @@ class AIDMMaterial : public UniaxialMaterial
       };
 
   public:
-      AIDMMaterial(int tag, double E, double eta = 0.0);
+      AIDMMaterial(int tag, double height, double width, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg);
       AIDMMaterial(int tag, double lammda, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg);
       AIDMMaterial();
     ~AIDMMaterial();
@@ -110,6 +110,9 @@ public:
     int setParameter(const char **argv, int argc, Parameter &param);
     int updateParameter(int parameterID, Information &info);
 
+    public:
+    void setLammda(const double& shearSpan);
+
   protected:
 
   private:
@@ -129,6 +132,7 @@ public:
   private:
       double backbone_ortStrainFactor = 1.2;
       double backbone_inidStrainFactor = 0.05;
+      double initialLammda = 2;
 
   private:
       double lammda;
@@ -169,7 +173,10 @@ public:
       //Need to update hysteretic
       bool needUpdateHANN_pos;
       bool needUpdateHANN_neg;
-    
+      bool needUpdateBANN;
+      //Section Height
+      double sectionHeight;
+
   private:
     double TStrain;
     double CStress;
@@ -177,6 +184,7 @@ public:
     double TStress;
     double CK;
     bool loading_direct_pos;
+    double Clammda;
 
 };
 
