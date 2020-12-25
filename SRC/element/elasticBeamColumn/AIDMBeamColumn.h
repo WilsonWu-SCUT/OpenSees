@@ -36,6 +36,7 @@
 #include <Node.h>
 #include <Matrix.h>
 #include <Vector.h>
+#include <vector>
 
 class Channel;
 class Information;
@@ -45,6 +46,8 @@ class Renderer;
 class AIDMMaterial;
 class UniaxialMaterial;
 
+
+
 class AIDMBeamColumn : public Element
 {
   public:
@@ -52,6 +55,9 @@ class AIDMBeamColumn : public Element
     AIDMBeamColumn(int tag, double A, double E, double G,
         double Jx, double Iy, double Iz,
         int Nd1, int Nd2, CrdTransf& theTransf, int numAidms, UniaxialMaterial** aidms);
+    AIDMBeamColumn(int tag, double A, double E, double G,
+        double Jx, double Iy, double Iz,
+        int Nd1, int Nd2, CrdTransf& theTransf, const std::vector<int> tag_vec);
 
     AIDMBeamColumn(int tag, double A, double E, double G,
 		  double Jx, double Iy, double Iz,
@@ -106,6 +112,7 @@ class AIDMBeamColumn : public Element
     int updateParameter (int parameterID, Information &info);
 
 private:
+    void initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTransf);
 	void setStiffMatrix(const double& length);
 	void setBasicForce(const double& length, const Vector& v);
 	int addPointLoad(const double& N, const double& Py, const double& Pz,
@@ -113,6 +120,10 @@ private:
 	void addGeneralPartialLoad(const double& Ni, const double& Nj, const double& Pyi,
 		const double& Pyj, const double& Pzi, const double& Pzj,
 		const double& aOverL, const double& bOverL, const double& length);
+
+  private:
+      int iAIDMTag;
+      int jAIDMTag;
 
   private:
     double A,E,G,Jx,Iy,Iz;
@@ -125,17 +136,10 @@ private:
     Vector Q;
     
     static Matrix kb;
-    static Matrix I;
-    static Matrix lumped_f_y;
-    static Matrix lumped_k_y;
-    static Matrix lumped_f_z;
-    static Matrix lumped_k_z;
 
     Vector q;
     double q0[5];  // Fixed end forces in basic system (no torsion)
     double p0[5];  // Reactions in basic system (no torsion)
-
-    int MRelease;      // moment release 0=none, 1=I, 2=J, 3=I,J
  
     Node *theNodes[2];
 

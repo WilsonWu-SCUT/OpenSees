@@ -1,4 +1,4 @@
-/* ****************************************************************** **
+ /* ****************************************************************** **
 **    OpenSees - Open System for Earthquake Engineering Simulation    **
 **          Pacific Earthquake Engineering Research Center            **
 **                                                                    **
@@ -166,8 +166,10 @@ public:
       //MaxDeformation
       double CstrainMax;
       double CstrainMin;
-      double CstressMaxCor;
-      double CStressMinCor;
+      //double CstressMaxCor;
+      //double CStressMinCor;
+      double CstressMaxFactor;
+      double CstressMinFactor;
       //Stiffness
       double K;
       //Need to update hysteretic

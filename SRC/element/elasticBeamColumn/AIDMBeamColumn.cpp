@@ -70,26 +70,83 @@ void AIDMBeamColumn::setStiffMatrix(const double& L)
 	kb(0, 0) = EAoverL;
 	kb(5, 5) = GJoverL;
 
-	//Only considering around y-axis rotation
-	//lumped_f_y(0, 0) = 1 / EIyoverL3 + 1 / AIDMs[0]->getTangent();
-	//lumped_f_y(0, 1) = lumped_f_y(1, 0) = -1 / (EIyoverL3 * 2);
-	//lumped_f_y(1, 1) = 1 / EIyoverL3 + 1 / AIDMs[1]->getTangent();
-	////Invert flexible matrix
-	//if (lumped_f_y.Solve(I, lumped_k_y) < 0)
-	//	opserr << "AIDMBeamColumn::setStiffMatrix() -- could not invert flexibility";
-	//Form basic stiffness matrix
-	kb(1, 1) = kb(2, 2) = EIzoverL4;
-	kb(2, 1) = kb(1, 2) = EIzoverL2;
-	kb(3, 3) = AIDMs[0]->getTangent();
-	kb(4, 4) = AIDMs[1]->getTangent();
 
+	if (iAIDMTag == -1)
+	{
+		//all release
+		if (jAIDMTag == -1)
+		{
+			// not thing to do
+		}
+		//i release j elastic
+		else if (jAIDMTag == -2)
+		{
+			kb(2, 2) = EIzoverL3;
+			kb(4, 4) = EIyoverL3;
+		}
+		//i release j aidm
+		else
+		{
+			kb(2, 2) = EIzoverL3;
+			kb(4, 4) = AIDMs[1]->getTangent();
+		}
+	}
+	else if (iAIDMTag == -2)
+	{
+		// i elastic j release
+		if (jAIDMTag == -1)
+		{
+			kb(1, 1) = EIzoverL3;
+			kb(3, 3) = EIyoverL3;
+		}
+		//ij elastic
+		else if (jAIDMTag == -2)
+		{
+			kb(1, 1) = kb(2, 2) = EIzoverL4;
+			kb(2, 1) = kb(1, 2) = EIzoverL2;
+			kb(3, 3) = kb(4, 4) = EIyoverL4;
+			kb(4, 3) = kb(3, 4) = EIyoverL2;
+		}
+		//i elastic j aidm
+		else
+		{
+			kb(1, 1) = kb(2, 2) = EIzoverL4;
+			kb(2, 1) = kb(1, 2) = EIzoverL2;
+			kb(3, 3) = EIyoverL3;
+			kb(4, 4) = AIDMs[1]->getTangent();
+		}
+	}
+	else
+	{
+		//i stiffness
+		kb(3, 3) = AIDMs[0]->getTangent();
+		//Release
+		if (jAIDMTag == -1)
+		{
+			kb(1, 1) = EIzoverL3;
+		}
+		//Elastic
+		else if (jAIDMTag == -2)
+		{
+			kb(1, 1) = kb(2, 2) = EIzoverL4;
+			kb(2, 1) = kb(1, 2) = EIzoverL2;
+			kb(4, 4) = EIyoverL3;
+		}
+		else
+		{
+			kb(1, 1) = kb(2, 2) = EIzoverL4;
+			kb(2, 1) = kb(1, 2) = EIzoverL2;
+			kb(4, 4) = AIDMs[1]->getTangent();
+		}
+	}
+
+	//Form basic stiffness matrix
 	//kb(3, 3) = kb(4, 4) = EIyoverL4;
 	//kb(4, 3) = kb(3, 4) = EIyoverL2;
 	
 	//kb(3, 3) = lumped_k_y(0, 0);
 	//kb(4, 3) = kb(3, 4) = lumped_k_y(0, 1);
-	
-	//kb(4, 4) = lumped_k_y(1, 1);
+
 
 	//if (kb(3, 3) == 0)
 	//{
@@ -141,17 +198,77 @@ void AIDMBeamColumn::setBasicForce(const double& L, const Vector& v)
 	q(0) = EAoverL * v(0);
 	q(5) = GJoverL * v(5);
 
-	q(1) = EIzoverL4 * v(1) + EIzoverL2 * v(2);
-	q(2) = EIzoverL2 * v(1) + EIzoverL4 * v(2);
-	//q(3) = EIyoverL4 * v(3) + EIyoverL2 * v(4);
-	//q(4) = EIyoverL2 * v(3) + EIyoverL4 * v(4);
-	q(3) = AIDMs[0]->getStress();
-		
-	//lumped_k_y(0, 0) * v(3) + lumped_k_y(0, 1) * v(4);
-	//lumped_k_y(0, 1) * v(3) + lumped_k_y(1, 1) * v(4);
-	q(4) = AIDMs[1]->getStress(); 
-
-
+	if (iAIDMTag == -1)
+	{
+		q(1) = 0; q(3) = 0;
+		//all release
+		if (jAIDMTag == -1)
+		{
+			q(2) = 0; q(4) = 0;
+		}
+		//i release j elastic
+		else if (jAIDMTag == -2)
+		{
+			q(2) = EIzoverL3 * v(2);
+			q(4) = EIyoverL3 * v(4);
+		}
+		//i release j aidm
+		else
+		{
+			q(2) = EIzoverL3 * v(2);
+			q(4) = AIDMs[1]->getStress();
+		}
+	}
+	else if (iAIDMTag == -2)
+	{
+		// i elastic j release
+		if (jAIDMTag == -1)
+		{
+			q(2) = 0; q(4) = 0;
+			q(1) = EIzoverL3 * v(1);
+			q(3) = EIyoverL3 * v(3);
+		}
+		//ij elastic
+		else if (jAIDMTag == -2)
+		{
+			q(1) = EIzoverL4 * v(1) + EIzoverL2 * v(2);
+			q(2) = EIzoverL2 * v(1) + EIzoverL4 * v(2);
+			q(3) = EIyoverL4 * v(3) + EIyoverL2 * v(4);
+			q(4) = EIyoverL2 * v(3) + EIyoverL4 * v(4);
+		}
+		//i elastic j aidm
+		else
+		{
+			q(1) = EIzoverL4 * v(1) + EIzoverL2 * v(2);
+			q(2) = EIzoverL2 * v(1) + EIzoverL4 * v(2);
+			q(3) = EIyoverL3 * v(3);
+			q(4) = AIDMs[1]->getStress();
+		}
+	}
+	else
+	{
+		//i stiffness
+		q(3) = AIDMs[0]->getStress();
+		//Release
+		if (jAIDMTag == -1)
+		{
+			q(2) = 0; q(4) = 0;
+			q(1) = EIzoverL3 * v(1);
+		}
+		//Elastic
+		else if (jAIDMTag == -2)
+		{
+			q(1) = EIzoverL4 * v(1) + EIzoverL2 * v(2);
+			q(2) = EIzoverL2 * v(1) + EIzoverL4 * v(2);
+			q(4) = EIyoverL3 * v(4);
+		}
+		else
+		{
+			q(1) = EIzoverL4 * v(1) + EIzoverL2 * v(2);
+			q(2) = EIzoverL2 * v(1) + EIzoverL4 * v(2);
+			q(4) = AIDMs[1]->getStress();
+		}
+	}
 
 	/*if (MRelease == 0)
 	{
@@ -197,7 +314,8 @@ int AIDMBeamColumn::addPointLoad(const double& N, const double& Py, const double
 	q0[0] -= N * aOverL;
 	double M1 = 0;
 	double M2 = 0;
-	if (MRelease == 0) {
+
+	if (iAIDMTag != -1 && jAIDMTag != -1) {
 		M1 = -a * b2 * Py * L2;
 		M2 = a2 * b * Py * L2;
 		q0[1] += M1;
@@ -207,20 +325,17 @@ int AIDMBeamColumn::addPointLoad(const double& N, const double& Py, const double
 		q0[3] -= M1;
 		q0[4] -= M2;
 	}
-	else if (MRelease == 1) {
+	else if (jAIDMTag != -1) {
 		M2 = 0.5 * Py * a * b * L2 * (a + L);
 		q0[2] += M2;
 		M2 = 0.5 * Pz * a * b * L2 * (a + L);
 		q0[4] -= M2;
 	}
-	else if (MRelease == 2) {
-		M2 = -0.5 * Py * a * b * L2 * (b + L);
+	else if (iAIDMTag != -1) {
+		M1 = -0.5 * Py * a * b * L2 * (b + L);
 		q0[1] += M1;
-		M2 = -0.5 * Pz * a * b * L2 * (b + L);
-		q0[3] -= M2;
-	}
-	else if (MRelease == 3) {
-		// Nothing to do
+		M1 = -0.5 * Pz * a * b * L2 * (b + L);
+		q0[3] -= M1;
 	}
 	return 0;
 }
@@ -251,11 +366,6 @@ void AIDMBeamColumn::addGeneralPartialLoad(const double& Ni, const double& Nj, c
 Matrix AIDMBeamColumn::K(12, 12);
 Vector AIDMBeamColumn::P(12);
 Matrix AIDMBeamColumn::kb(6, 6);
-Matrix AIDMBeamColumn::I(2, 2);
-Matrix AIDMBeamColumn::lumped_f_y(2, 2);
-Matrix AIDMBeamColumn::lumped_k_y(2, 2);
-Matrix AIDMBeamColumn::lumped_f_z(2, 2);
-Matrix AIDMBeamColumn::lumped_k_z(2, 2);
 
 void* OPS_AIDMBeamColumn(void)
 {
@@ -295,21 +405,16 @@ void* OPS_AIDMBeamColumn(void)
 	}
 	//AIDMS
 	int numAIDMS = 2;
-	UniaxialMaterial** theMats = new UniaxialMaterial * [numAIDMS];
+	std::vector<int> vec = {};
 	int aidmTags[2];
 	if (OPS_GetIntInput(&numAIDMS, &aidmTags[0]) < 0) return 0;
 	for (int i = 0; i < numAIDMS; i++)
 	{
-		theMats[i] = OPS_getUniaxialMaterial(aidmTags[i]);
-		if (theMats[i] == 0) {
-			opserr << "WARNING no material " << aidmTags[i] <<
-				"exitsts - element AIDMBeamColumn\n";
-			return 0;
-		}
+		vec.push_back(aidmTags[i]);
 	}
 
 	return new AIDMBeamColumn(iData[0], data[0], data[1], data[2], data[3], data[4],
-		data[5], iData[1], iData[2], *theTrans, numAIDMS, theMats);
+		data[5], iData[1], iData[2], *theTrans, vec);
 }
 
 AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
@@ -318,43 +423,12 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
 	:Element(tag, ELE_TAG_AIDMBeamColumn),
 	A(A), E(E), G(G), Jx(Jx), Iy(Iy), Iz(Iz),
 	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0),
-	numAIDMs(numAidms)
+	numAIDMs(numAidms), iAIDMTag(0), jAIDMTag(0)
 {
 	// allocate memory for numMaterials1d uniaxial material models
 	AIDMs = new AIDMMaterial * [numAidms];
 
-	connectedExternalNodes(0) = Nd1;
-	connectedExternalNodes(1) = Nd2;
-
-	theCoordTransf = theTransf.getCopy3d();
-
-	if (!theCoordTransf) {
-		opserr << "ElasticBeam3d::ElasticBeam3d -- failed to get copy of coordinate transformation\n";
-		exit(-1);
-	}
-
-	q0[0] = 0.0;
-	q0[1] = 0.0;
-	q0[2] = 0.0;
-	q0[3] = 0.0;
-	q0[4] = 0.0;
-
-	p0[0] = 0.0;
-	p0[1] = 0.0;
-	p0[2] = 0.0;
-	p0[3] = 0.0;
-	p0[4] = 0.0;
-
-	//Form basic matrix
-	if (I(0, 0) != 1)
-	{
-		I(0, 0) = 1;
-		I(1, 1) = 1;
-	}
-
-	// set node pointers to NULL
-	for (int i = 0; i < 2; i++)
-		theNodes[i] = 0;
+	this->initialAIDMBeamColumn(Nd1, Nd2, theTransf);
 
 	// get a copy of the material objects and check we obtained a valid copy
 	for (int i = 0; i < numAIDMs; i++) {
@@ -367,10 +441,43 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
 	}
 }
 
+AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
+	double Jx, double Iy, double Iz,
+	int Nd1, int Nd2, CrdTransf& theTransf, const std::vector<int> tag_vec)
+	:Element(tag, ELE_TAG_AIDMBeamColumn),
+	A(A), E(E), G(G), Jx(Jx), Iy(Iy), Iz(Iz),
+	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0),
+	numAIDMs(tag_vec.size())
+{
+	// allocate memory for numMaterials1d uniaxial material models
+	AIDMs = new AIDMMaterial * [numAIDMs];
+	iAIDMTag = tag_vec[0]; jAIDMTag = tag_vec[1];
+
+	this->initialAIDMBeamColumn(Nd1, Nd2, theTransf);
+
+	// get a copy of the material objects and check we obtained a valid copy
+	for (int i = 0; i < numAIDMs; i++) {
+		if (tag_vec[i] < 0)
+		{
+			AIDMs[i] = new AIDMMaterial();
+		}
+		else
+		{
+			AIDMs[i] = dynamic_cast<AIDMMaterial*>(OPS_getUniaxialMaterial(tag_vec[i])->getCopy());
+			if (AIDMs[i] == 0)
+			{
+				opserr << "WARNING no material " << tag_vec[i] <<
+					"exitsts - element AIDMBeamColumn\n";
+				exit(-1);
+			}
+		}
+	}
+}
+
 AIDMBeamColumn::AIDMBeamColumn()
 	:Element(0, ELE_TAG_AIDMBeamColumn),
 	A(0.0), E(0.0), G(0.0), Jx(0.0), Iy(0.0), Iz(0.0),
-	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0)
+	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0)
 {
 	// does nothing
 	q0[0] = 0.0;
@@ -395,7 +502,7 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double a, double e, double g,
 	CrdTransf& coordTransf, double r, int cm, int sectTag)
 	:Element(tag, ELE_TAG_AIDMBeamColumn),
 	A(a), E(e), G(g), Jx(jx), Iy(iy), Iz(iz),
-	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(0)
+	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0)
 {
 	connectedExternalNodes(0) = Nd1;
 	connectedExternalNodes(1) = Nd2;
@@ -419,13 +526,6 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double a, double e, double g,
 	p0[3] = 0.0;
 	p0[4] = 0.0;
 
-	//Form basic matrix
-	if (I(0, 0) != 1)
-	{
-		I(0, 0) = 1;
-		I(1, 1) = 1;
-	}
-
 	// set node pointers to NULL
 	for (int i = 0; i < 2; i++)
 		theNodes[i] = 0;
@@ -437,7 +537,7 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double a, double e, double g,
 	double r, int cm, int sectTag)
 	:Element(tag, ELE_TAG_AIDMBeamColumn),
 	A(a), E(e), G(g), Jx(jx), Iy(iy), Iz(iz),
-	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), MRelease(release)
+	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0)
 {
 	connectedExternalNodes(0) = Nd1;
 	connectedExternalNodes(1) = Nd2;
@@ -476,6 +576,35 @@ AIDMBeamColumn::~AIDMBeamColumn()
 {
 	if (theCoordTransf)
 		delete theCoordTransf;
+}
+
+void AIDMBeamColumn::initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTransf)
+{
+	connectedExternalNodes(0) = Nd1;
+	connectedExternalNodes(1) = Nd2;
+
+	theCoordTransf = theTransf.getCopy3d();
+
+	if (!theCoordTransf) {
+		opserr << "ElasticBeam3d::ElasticBeam3d -- failed to get copy of coordinate transformation\n";
+		exit(-1);
+	}
+
+	q0[0] = 0.0;
+	q0[1] = 0.0;
+	q0[2] = 0.0;
+	q0[3] = 0.0;
+	q0[4] = 0.0;
+
+	p0[0] = 0.0;
+	p0[1] = 0.0;
+	p0[2] = 0.0;
+	p0[3] = 0.0;
+	p0[4] = 0.0;
+
+	// set node pointers to NULL
+	for (int i = 0; i < 2; i++)
+		theNodes[i] = 0;
 }
 
 int
@@ -609,32 +738,32 @@ AIDMBeamColumn::update(void)
 	//basic stiffness matrix
 	this->setStiffMatrix(L);
 	//BasicForce
-	this->setBasicForce(L, v);
-	q(0) += q0[0];
+	//this->setBasicForce(L, v);
+	/*q(0) += q0[0];
 	q(1) += q0[1];
 	q(2) += q0[2];
 	q(3) += q0[3];
-	q(4) += q0[4];
+	q(4) += q0[4];*/
 	return retVal < 0? -1: 0;
 }
 
 const Matrix&
 AIDMBeamColumn::getTangentStiff(void)
 {
-	//const Vector& v = theCoordTransf->getBasicTrialDisp();
+	const Vector& v = theCoordTransf->getBasicTrialDisp();
 
-	//double L = theCoordTransf->getInitialLength();
+	double L = theCoordTransf->getInitialLength();
 
-	//////设定刚度
-	//setStiffMatrix(L);
-	//////设定局部力
-	//setBasicForce(L, v);
+	//设定刚度
+	setStiffMatrix(L);
+	//设定局部力
+	setBasicForce(L, v);
 
-	//q(0) += q0[0];
-	//q(1) += q0[1];
-	//q(2) += q0[2];
-	//q(3) += q0[3];
-	//q(4) += q0[4];
+	q(0) += q0[0];
+	q(1) += q0[1];
+	q(2) += q0[2];
+	q(3) += q0[3];
+	q(4) += q0[4];
 
 	return theCoordTransf->getGlobalStiffMatrix(kb, q);
 }
@@ -707,26 +836,22 @@ AIDMBeamColumn::addLoad(ElementalLoad *theLoad, double loadFactor)
 	  // Fixed end forces in basic system
 	  q0[0] -= 0.5 * P;
 
-	  if (MRelease == 0) 
+	  if (iAIDMTag != -1 && jAIDMTag != -1)
       {
 		  q0[1] -= Mz;
 		  q0[2] += Mz;
 		  q0[3] += My;
 		  q0[4] -= My;
 	  }
-	  else if (MRelease == 1) 
+	  else if (jAIDMTag != -1)
       {
 		  q0[2] += wy * L * L / 8;
 		  q0[4] -= wz * L * L / 8;
 	  }
-	  else if (MRelease == 2) 
+	  else if (iAIDMTag != -1)
       {
 		  q0[1] -= wy * L * L / 8;
 		  q0[3] += wz * L * L / 8;
-	  }
-	  else if (MRelease == 3) 
-      {
-		  // Nothing to do
 	  }
   }
   else if (type == LOAD_TAG_Beam3dPartialUniformLoad) {
@@ -845,7 +970,6 @@ AIDMBeamColumn::addLoad(ElementalLoad *theLoad, double loadFactor)
   return 0;
 }
 
-
 int
 AIDMBeamColumn::addInertiaLoadToUnbalance(const Vector& accel)
 {
@@ -867,6 +991,18 @@ AIDMBeamColumn::getResistingForceIncInertia()
 const Vector&
 AIDMBeamColumn::getResistingForce()
 {
+	// Get basic deformations
+	const Vector& v = theCoordTransf->getBasicTrialDisp();
+	// Length of the element
+	double L = theCoordTransf->getInitialLength();
+	//BasicForce
+	this->setBasicForce(L, v);
+	q(0) += q0[0];
+	q(1) += q0[1];
+	q(2) += q0[2];
+	q(3) += q0[3];
+	q(4) += q0[4];
+	// Vector for reactions in basic system
 	Vector p0Vec(p0, 5);
 	return theCoordTransf->getGlobalResistingForce(q, p0Vec);
 }
@@ -1177,7 +1313,7 @@ AIDMBeamColumn::setResponse(const char** argv, int argc, OPS_Stream& output)
 		theResponse = new ElementResponse(this, 4, Vector(6));
 
 	}
-	else if (strcmp(argv[0], "deformations") == 0 ||
+	else if (strcmp(argv[0], "deformations") == 0 || strcmp(argv[0], "deformation") == 0 ||
 		strcmp(argv[0], "basicDeformations") == 0) {
 
 		output.tag("ResponseType", "eps");

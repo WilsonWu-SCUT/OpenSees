@@ -256,7 +256,8 @@ void AIDMMaterial::setReloadingTangent(const double& strain, bool loading_direct
     this->updateHystereticParams(loading_direct_pos);
     //Maximum deformation
     auto max_strain = loading_direct_pos ? CstrainMax : CstrainMin;
-    auto max_stress = loading_direct_pos ? CstressMaxCor : CStressMinCor;
+    auto max_stress = loading_direct_pos ? CstressMaxFactor * stressFactor_pos * stressSA_pos :
+        CstressMinFactor * stressFactor_neg * stressSA_neg;
     //prk point capacity
     auto brk_prt_stress = max_stress * (loading_direct_pos ? gamma_pos : gamma_neg);
     //oriented point capacity
@@ -341,6 +342,11 @@ float AIDMMaterial::getNormalValue(const double& value, const AIDMParamEnum& typ
     {
         normalValue = normalValue > 1 ? normalValue : 1.5;
     }
+    else  if (type == AIDMParamEnum::StressFactor)
+    {
+        normalValue = normalValue > 1.2 ? 1.2 : normalValue;
+    }
+
     else if (type == AIDMParamEnum::Afa || type == AIDMParamEnum::Beta)
     {
         if (value < 0) return 0.001;
@@ -390,6 +396,8 @@ void AIDMMaterial::updateSkeletonParams()
 
 void AIDMMaterial::updateHystereticParams(bool is_pos)
 {
+    //Try to update skeleton
+    this->updateSkeletonParams();
     //is need to update
     if ((is_pos ? !needUpdateHANN_pos : !needUpdateHANN_neg))
         return;
@@ -397,7 +405,8 @@ void AIDMMaterial::updateHystereticParams(bool is_pos)
     auto secant_Kc = is_pos ? stressFactor_pos * stressSA_pos / strainC_pos :
         stressFactor_neg * stressSA_neg / strainC_neg;
     //Input params
-    auto secantK = is_pos ? CstressMaxCor / CstrainMax : CStressMinCor / CstrainMin;
+    auto secantK = is_pos ? CstressMaxFactor * stressFactor_pos * stressSA_pos / CstrainMax :
+        CstressMinFactor * stressFactor_neg * stressSA_neg / CstrainMin;        
     auto secantKFactor = this->getRegularizedValue(secantK / secant_Kc, AIDMParamEnum::SecantK);
     auto& componentParamvec = this->getComponentParamsVec(is_pos);
     componentParamvec.push_back(secantKFactor);
@@ -460,7 +469,7 @@ AIDMMaterial::commitState(void)
         if (abs(CstrainMax) > abs(CStrain) || abs(CStrain) < backbone_inidStrainFactor * strainC_pos)
             return 0;
         CstrainMax = CStrain;
-        CstressMaxCor = CStress;
+        CstressMaxFactor = CStress / (stressFactor_pos * stressSA_pos);
         needUpdateHANN_pos = true;
     }
     else
@@ -468,7 +477,7 @@ AIDMMaterial::commitState(void)
         if (abs(CstrainMin) > abs(CStrain) || abs(CStrain) < backbone_inidStrainFactor * strainC_neg)
             return 0;
         CstrainMin = CStrain;
-        CStressMinCor = CStress;
+        CstressMinFactor = CStress / (stressFactor_neg * stressSA_neg);
         needUpdateHANN_neg = true;
     }
     return 0;
