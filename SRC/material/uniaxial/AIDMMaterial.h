@@ -112,6 +112,7 @@ public:
 
     public:
     void setLammda(const double& shearSpan);
+    bool checkCapacity(const double& Moment, const int& eleTag);
 
   protected:
 
@@ -128,11 +129,13 @@ public:
       std::vector<float> getComponentParamsVec(bool is_pos);
       void updateSkeletonParams();
       void updateHystereticParams(bool is_pos);
+      bool isAvailabelAIDM() const;
 
   private:
       double backbone_ortStrainFactor = 1.2;
       double backbone_inidStrainFactor = 0.05;
       double initialLammda = 2;
+     
 
   private:
       double lammda;
@@ -166,8 +169,6 @@ public:
       //MaxDeformation
       double CstrainMax;
       double CstrainMin;
-      //double CstressMaxCor;
-      //double CStressMinCor;
       double CstressMaxFactor;
       double CstressMinFactor;
       //Stiffness
@@ -185,9 +186,9 @@ public:
     double CStrain;
     double TStress;
     double CK;
-    bool loading_direct_pos;
     double Clammda;
-
+    bool isKill;
+    bool isCKill;
 };
 
 

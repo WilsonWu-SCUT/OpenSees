@@ -119,7 +119,7 @@ stressSA_pos(Msa_pos), stressSA_neg(Msa_neg),
 CstrainMax(0), CstrainMin(0),
 lammda(initialLammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(height),
-afa_pos(0.0), afa_neg(0.0)
+afa_pos(0.0), afa_neg(0.0), isKill(false), isCKill(false)
 {
     this->updateSkeletonParams();
 }
@@ -133,7 +133,7 @@ AIDMMaterial::AIDMMaterial(int tag, double lammda, double lammdaS, double lammda
     CstrainMax(0), CstrainMin(0),
     lammda(lammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
     needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(0.0),
-    afa_pos(0.0), afa_neg(0.0)
+    afa_pos(0.0), afa_neg(0.0), isKill(false), isCKill(false)
 {
     this->updateSkeletonParams();
 }
@@ -141,16 +141,13 @@ AIDMMaterial::AIDMMaterial(int tag, double lammda, double lammdaS, double lammda
 
 AIDMMaterial::AIDMMaterial()
 :UniaxialMaterial(0, MAT_TAG_AIDMMaterial),
-    TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
-    K(0),
-    m_pos(0), m_neg(0), n_pos(0), n_neg(0),
-    strainC_pos(0), strainC_neg(0), stressFactor_pos(0), stressFactor_neg(0),
-    stressSA_pos(0), stressSA_neg(0),
-    CstrainMax(0), CstrainMin(0),
-    afa_pos(1), afa_neg(1),
-    beta_pos(0.5), beta_neg(0.5),
-    gamma_pos(0.5), gamma_neg(0.5),
-    eta_pos(0.9), eta_neg(0.9)
+TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
+K(0), CK(0.0),
+stressSA_pos(0.0), stressSA_neg(0.0),
+CstrainMax(0), CstrainMin(0),
+lammda(initialLammda), lammdaS(0.0), lammdaSV(0.0), lammdaT_pos(0.0),
+needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(0.0),
+afa_pos(0.0), afa_neg(0.0)
 {
 
 }
@@ -164,9 +161,17 @@ AIDMMaterial::~AIDMMaterial()
 int 
 AIDMMaterial::setTrialStrain(double strain, double strainRate)
 {
+    //Ensure is null or not
+    if (!this->isAvailabelAIDM() || this->isCKill)
+        return 0;
     //if strain is equal
+    auto loading_direct_pos = true;
     if(abs(CStrain - strain) > 1E-16)
         loading_direct_pos = CStrain < strain;
+    else if (CStrain != 0 && strain != 0)
+    {
+        return 0;
+    }
     //history maximum strain
     auto max_strain = loading_direct_pos ? CstrainMax : CstrainMin;
     //strain larger than history maximum value -> go on backbone
@@ -190,6 +195,17 @@ AIDMMaterial::setTrialStrain(double strain, double strainRate)
     {
         this->setReloadingTangent(strain, loading_direct_pos);
     }
+    //is kill the element
+    bool isPost = abs(max_strain) > (loading_direct_pos ? strainC_pos : strainC_neg);
+    if (isPost && abs(loading_direct_pos ? CstressMaxFactor : CstressMinFactor) < 0.2)
+    {
+        isKill = true;
+        K = 0;
+        TStress = 0;
+    }
+
+
+    
     return 0;
 }
 
@@ -207,7 +223,7 @@ void AIDMMaterial::setTangentOnBackbone(const double& strain, bool loading_direc
     //Update params
     this->updateSkeletonParams();
     //Oriented Strain Stress
-    auto oriented_strain = backbone_inidStrainFactor * (loading_direct_pos > 0 ? strainC_pos : -strainC_neg);
+    auto oriented_strain = backbone_inidStrainFactor * (loading_direct_pos ? strainC_pos : -strainC_neg);
     //In same side
     if ((loading_direct_pos ? strain >= 0 : strain <= 0))
     {
@@ -333,11 +349,15 @@ float AIDMMaterial::getNormalValue(const double& value, const AIDMParamEnum& typ
     if (type == AIDMParamEnum::Afa || type == AIDMParamEnum::Beta ||
         type == AIDMParamEnum::Gamma || type == AIDMParamEnum::Eta)
     {
-        if (value < 0) return 0.001;
+        if (value < 0) 
+            return 0.001;
     }
     auto& vec = getRegularizedValueVector(type);
     auto powValue = pow(value, 1 / vec[2]);
     auto normalValue =  powValue * (vec[1] - vec[0]) + vec[0];
+
+
+
     if (type == AIDMParamEnum::m || type == AIDMParamEnum::n)
     {
         normalValue = normalValue > 1 ? normalValue : 1.5;
@@ -345,16 +365,23 @@ float AIDMMaterial::getNormalValue(const double& value, const AIDMParamEnum& typ
     else  if (type == AIDMParamEnum::StressFactor)
     {
         normalValue = normalValue > 1.2 ? 1.2 : normalValue;
+        normalValue = normalValue < 0.5 ? 0.5 : normalValue;
+    }
+    else if (type == AIDMParamEnum::StrainC)
+    {
+        normalValue = normalValue < 0.005 ? 0.005 : normalValue;
     }
 
     else if (type == AIDMParamEnum::Afa || type == AIDMParamEnum::Beta)
     {
-        if (value < 0) return 0.001;
+        if (value < 0) 
+            return 0.001;
     }
 
     else if (type == AIDMParamEnum::Gamma || type == AIDMParamEnum::Eta)
     {
-        if (value < 0) return 0.001;
+        if (value < 0) 
+            return 0.001;
         else if (value > 1) 
             return 1;
     }
@@ -401,12 +428,28 @@ void AIDMMaterial::updateHystereticParams(bool is_pos)
     //is need to update
     if ((is_pos ? !needUpdateHANN_pos : !needUpdateHANN_neg))
         return;
+    //Maximum deformation
+    auto max_strain = is_pos ? CstrainMax : CstrainMin;
+    auto max_stress = is_pos ? CstressMaxFactor * stressFactor_pos * stressSA_pos :
+        CstressMinFactor * stressFactor_neg * stressSA_neg;
+    auto skeleton_stress = this->getStressOnBackbone(max_strain);
     //Caping secant stiffness
     auto secant_Kc = is_pos ? stressFactor_pos * stressSA_pos / strainC_pos :
         stressFactor_neg * stressSA_neg / strainC_neg;
     //Input params
-    auto secantK = is_pos ? CstressMaxFactor * stressFactor_pos * stressSA_pos / CstrainMax :
-        CstressMinFactor * stressFactor_neg * stressSA_neg / CstrainMin;        
+    auto secantK = max_stress / max_strain;
+    //is Pre capping
+    bool isPreCapping = (is_pos ? strainC_pos : strainC_neg) > abs(max_strain);
+    //Not Reach Max deformation Prt
+    if (max_strain == 0)
+    {
+        //Oriented Strain Stress
+        auto oriented_strain = backbone_inidStrainFactor * (is_pos ? strainC_pos : -strainC_neg);
+        secantK = this->getStressOnBackbone(oriented_strain) / (oriented_strain);
+    }
+    //post capping ignore the stiffness dagradation
+    else if (isPreCapping && abs(max_stress) / abs(skeleton_stress) < 0.8)
+        secantK = this->getStressOnBackbone(max_strain) / (max_strain);
     auto secantKFactor = this->getRegularizedValue(secantK / secant_Kc, AIDMParamEnum::SecantK);
     auto& componentParamvec = this->getComponentParamsVec(is_pos);
     componentParamvec.push_back(secantKFactor);
@@ -463,6 +506,7 @@ AIDMMaterial::commitState(void)
     CStress = TStress;
     CK = K;
     Clammda = lammda;
+    isCKill = isKill;
     //Record Maxmum deformation
     if (CStrain > 0)
     {
@@ -491,6 +535,9 @@ AIDMMaterial::revertToLastCommit(void)
     TStress = CStress;
     K = CK;
     lammda = Clammda;
+    needUpdateBANN = true;
+    needUpdateHANN_neg = true;
+    needUpdateHANN_pos = true;
     return 0;
 }
 
@@ -559,6 +606,8 @@ AIDMMaterial::updateParameter(int parameterID, Information &info)
 
 void AIDMMaterial::setLammda(const double& shearSpan)
 {
+    if (this->sectionHeight == 0)
+        return;
     auto Lammda = abs(shearSpan) / this->sectionHeight;
     if (Lammda < 0.5 || Lammda > 5)
     {
@@ -577,6 +626,23 @@ void AIDMMaterial::setLammda(const double& shearSpan)
     }
 }
 
+bool AIDMMaterial::checkCapacity(const double& Moment, const int& eleTag)
+{
+    if (!isAvailabelAIDM())
+        return true;
+    auto limitFactor = 0.5;
+    auto capacity = Moment < 0 ? this->stressSA_neg * this->stressFactor_neg : 
+         this->stressSA_pos * this->stressFactor_pos;
+     if (abs(Moment) < capacity * limitFactor)
+         return true;
+     if (Moment > 0)
+         this->stressSA_pos = abs(Moment) * ( 1 / limitFactor);
+     else this->stressSA_neg = abs(Moment)* (1 / limitFactor);
+     opserr << "Warinning: the capacity of AIDMBeamColumn " << eleTag << " with AIDMMaterial " << this->getTag() <<
+         " is too weak: strengthen automatically."<< endln;
+     return false;
+}
+
 double AIDMMaterial::getStressOnBackbone(const double& drift)
 {
     auto m = drift > 0 ? m_pos : m_neg;
@@ -588,3 +654,10 @@ double AIDMMaterial::getStressOnBackbone(const double& drift)
     return drift > 0? y * capacity : -y * capacity;
 }
 
+
+bool AIDMMaterial::isAvailabelAIDM() const
+{
+    if (this->lammdaS == 0 || this->lammdaSV == 0 || this->lammdaT_pos == 0)
+        return false;
+    return true;
+}

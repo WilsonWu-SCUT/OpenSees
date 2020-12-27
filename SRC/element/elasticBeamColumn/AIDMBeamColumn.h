@@ -120,10 +120,14 @@ private:
 	void addGeneralPartialLoad(const double& Ni, const double& Nj, const double& Pyi,
 		const double& Pyj, const double& Pzi, const double& Pzj,
 		const double& aOverL, const double& bOverL, const double& length);
+    bool isAvailabelAIDM() const;
 
   private:
       int iAIDMTag;
       int jAIDMTag;
+      bool isGravityConst;
+      double TLoadFactor;
+      double CLoadFactor;
 
   private:
     double A,E,G,Jx,Iy,Iz;
