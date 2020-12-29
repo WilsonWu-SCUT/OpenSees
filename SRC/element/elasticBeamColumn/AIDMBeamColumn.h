@@ -129,6 +129,8 @@ private:
       double TLoadFactor;
       double CLoadFactor;
 
+      bool isInitial;
+
   private:
     double A,E,G,Jx,Iy,Iz;
 

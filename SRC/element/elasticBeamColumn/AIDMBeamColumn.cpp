@@ -73,7 +73,8 @@ void AIDMBeamColumn::setStiffMatrix(const double& L)
 
 	kb(0, 0) = EAoverL;
 	kb(5, 5) = GJoverL;
-
+	kb(3, 3) = AIDMs[0]->getTangent();
+	kb(4, 4) = AIDMs[1]->getTangent();
 
 	if (iAIDMTag == -1)
 	{
@@ -92,7 +93,6 @@ void AIDMBeamColumn::setStiffMatrix(const double& L)
 		else
 		{
 			kb(2, 2) = EIzoverL3;
-			kb(4, 4) = AIDMs[1]->getTangent();
 		}
 	}
 	else if (iAIDMTag == -2)
@@ -101,32 +101,20 @@ void AIDMBeamColumn::setStiffMatrix(const double& L)
 		if (jAIDMTag == -1)
 		{
 			kb(1, 1) = EIzoverL3;
-			kb(3, 3) = EIyoverL3;
 		}
 		//ij elastic
 		else if (jAIDMTag == -2)
 		{
-			//kb(1, 1) = kb(2, 2) = EIzoverL4;
-			//kb(2, 1) = kb(1, 2) = EIzoverL2;
-			//kb(3, 3) = kb(4, 4) = EIyoverL4;
-			//kb(4, 3) = kb(3, 4) = EIyoverL2;
 			kb(1, 1) = kb(2, 2) = EIzoverL3 * 2;
-			kb(3, 3) = kb(4, 4) = EIyoverL3 * 2;
 		}
 		//i elastic j aidm
 		else
 		{
-			//kb(1, 1) = kb(2, 2) = EIzoverL4;
-			//kb(2, 1) = kb(1, 2) = EIzoverL2;
 			kb(1, 1) = kb(2, 2) = EIzoverL3 * 2;
-			kb(3, 3) = EIyoverL3 * 2;
-			kb(4, 4) = AIDMs[1]->getTangent();
 		}
 	}
 	else
 	{
-		//i stiffness
-		kb(3, 3) = AIDMs[0]->getTangent();
 		//Release
 		if (jAIDMTag == -1)
 		{
@@ -135,26 +123,13 @@ void AIDMBeamColumn::setStiffMatrix(const double& L)
 		//Elastic
 		else if (jAIDMTag == -2)
 		{
-			//kb(1, 1) = kb(2, 2) = EIzoverL4;
-			//kb(2, 1) = kb(1, 2) = EIzoverL2;
 			kb(1, 1) = kb(2, 2) = EIzoverL3 * 2;
-			kb(4, 4) = EIyoverL3 * 2;
 		}
 		else
 		{
-			//kb(1, 1) = kb(2, 2) = EIzoverL4;
-			//kb(2, 1) = kb(1, 2) = EIzoverL2;
 			kb(1, 1) = kb(2, 2) = EIzoverL3 * 2;
-			kb(4, 4) = AIDMs[1]->getTangent();
 		}
 	}
-
-	//Form basic stiffness matrix
-	//kb(3, 3) = kb(4, 4) = EIyoverL4;
-	//kb(4, 3) = kb(3, 4) = EIyoverL2;
-	
-	//kb(3, 3) = lumped_k_y(0, 0);
-	//kb(4, 3) = kb(3, 4) = lumped_k_y(0, 1);
 
 }
 
@@ -178,6 +153,8 @@ void AIDMBeamColumn::setBasicForce(const double& L, const Vector& v)
 
 	q(0) = EAoverL * v(0);
 	q(5) = GJoverL * v(5);
+	q(3) = AIDMs[0]->getStress();
+	q(4) = -AIDMs[1]->getStress();
 
 	if (iAIDMTag == -1)
 	{
@@ -197,7 +174,6 @@ void AIDMBeamColumn::setBasicForce(const double& L, const Vector& v)
 		else
 		{
 			q(2) = EIzoverL3 * v(2);
-			q(4) = AIDMs[1]->getStress();
 		}
 	}
 	else if (iAIDMTag == -2)
@@ -207,38 +183,23 @@ void AIDMBeamColumn::setBasicForce(const double& L, const Vector& v)
 		{
 			q(2) = 0; q(4) = 0;
 			q(1) = EIzoverL3 * v(1);
-			q(3) = EIyoverL3 * v(3);
 		}
 		//ij elastic
 		else if (jAIDMTag == -2)
 		{
-			//q(1) = EIzoverL4 * v(1) + EIzoverL2 * v(2);
-			//q(2) = EIzoverL2 * v(1) + EIzoverL4 * v(2);
-			//q(3) = EIyoverL4 * v(3) + EIyoverL2 * v(4);
-			//q(4) = EIyoverL2 * v(3) + EIyoverL4 * v(4);
-
 			q(1) = EIzoverL3 * 2 * v(1);
 			q(2) = EIzoverL3 * 2 * v(2);
-			q(3) = EIyoverL3 * 2 * v(3);
-			q(4) = EIyoverL3 * 2 * v(4);
 		}
 		//i elastic j aidm
 		else
 		{
-			/*q(1) = EIzoverL4 * v(1) + EIzoverL2 * v(2);
-			q(2) = EIzoverL2 * v(1) + EIzoverL4 * v(2);*/
-
 			q(1) = EIzoverL3 * 2 * v(1);
 			q(2) = EIzoverL3 * 2 * v(2);
-
-			q(3) = EIyoverL3 * v(3) *  2;
-			q(4) = AIDMs[1]->getStress();
 		}
 	}
 	else
 	{
 		//i stiffness
-		q(3) = AIDMs[0]->getStress();
 		//Release
 		if (jAIDMTag == -1)
 		{
@@ -248,52 +209,21 @@ void AIDMBeamColumn::setBasicForce(const double& L, const Vector& v)
 		//Elastic
 		else if (jAIDMTag == -2)
 		{
-			/*q(1) = EIzoverL4 * v(1) + EIzoverL2 * v(2);
-			q(2) = EIzoverL2 * v(1) + EIzoverL4 * v(2);*/
-
 			q(1) = EIzoverL3 * 2 * v(1);
 			q(2) = EIzoverL3 * 2 * v(2);
-
-			q(4) = EIyoverL3 * v(4) * 2;
 		}
 		else
 		{
-			/*q(1) = EIzoverL4 * v(1) + EIzoverL2 * v(2);
-			q(2) = EIzoverL2 * v(1) + EIzoverL4 * v(2);*/
-
 			q(1) = EIzoverL3 * 2 * v(1);
 			q(2) = EIzoverL3 * 2 * v(2);
-
-			q(4) = AIDMs[1]->getStress();
 		}
 	}
 
-	//q(0) += q0[0];
-	//q(1) += q0[1];
-	//q(2) += q0[2];
-	//if (iAIDMTag < 0)
-	//{
-	//	q(3) += q0[3];
-	//}
-	//if (jAIDMTag < 0)
-	//{
-	//	q(4) += q0[4];
-	//}
-
-	/*if (MRelease == 0)
-	{
-		q(1) = EIzoverL4 * v(1) + EIzoverL2 * v(2);
-		q(2) = EIzoverL2 * v(1) + EIzoverL4 * v(2);
-		q(3) = EIyoverL4 * v(3) + EIyoverL2 * v(4);
-		q(4) = EIyoverL2 * v(3) + EIyoverL4 * v(4);
-	}
-	else
-	{
-		q(1) = MRelease == 2 ? EIzoverL3 * v(1) : 0;
-		q(2) = MRelease == 1 ? EIzoverL3 * v(2) : 0;
-		q(3) = MRelease == 2 ? EIyoverL3 * v(3) : 0;
-		q(4) = MRelease == 1 ? EIyoverL3 * v(4) : 0;
-	}*/
+	q(0) += q0[0];
+	q(1) += q0[1];
+	q(2) += q0[2];
+	q(3) += q0[3];
+	q(4) += q0[4];
 }
 
 int AIDMBeamColumn::addPointLoad(const double& N, const double& Py, const double& Pz, const double& aOverL, const double& L)
@@ -433,7 +363,7 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
 	:Element(tag, ELE_TAG_AIDMBeamColumn),
 	A(A), E(E), G(G), Jx(Jx), Iy(Iy), Iz(Iz),
 	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0),
-	numAIDMs(numAidms), iAIDMTag(0), jAIDMTag(0), isGravityConst(false), CLoadFactor(0.0), TLoadFactor(0.0)
+	numAIDMs(numAidms), iAIDMTag(0), jAIDMTag(0), isGravityConst(false), CLoadFactor(0.0), TLoadFactor(0.0), isInitial(false)
 {
 	// allocate memory for numMaterials1d uniaxial material models
 	AIDMs = new AIDMMaterial * [numAidms];
@@ -457,11 +387,12 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
 	:Element(tag, ELE_TAG_AIDMBeamColumn),
 	A(A), E(E), G(G), Jx(Jx), Iy(Iy), Iz(Iz),
 	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0),
-	numAIDMs(tag_vec.size()), isGravityConst(false), CLoadFactor(0.0), TLoadFactor(0.0)
+	numAIDMs(tag_vec.size()), isGravityConst(false), CLoadFactor(0.0), TLoadFactor(0.0), isInitial(false)
 {
 	// allocate memory for numMaterials1d uniaxial material models
 	AIDMs = new AIDMMaterial * [numAIDMs];
 	iAIDMTag = tag_vec[0]; jAIDMTag = tag_vec[1];
+//	iAIDMTag = -2; jAIDMTag = -2;
 
 	this->initialAIDMBeamColumn(Nd1, Nd2, theTransf);
 
@@ -482,6 +413,7 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
 			}
 		}
 	}
+	
 }
 
 AIDMBeamColumn::AIDMBeamColumn()
@@ -711,6 +643,10 @@ AIDMBeamColumn::commitState()
 	{
 		retVal += AIDMs[i]->commitState();
 	}
+	//is Kill
+	if (this->AIDMs[0]->iskill()) iAIDMTag = -1;
+	if (this->AIDMs[1]->iskill()) jAIDMTag = -1;
+
 	retVal += theCoordTransf->commitState();
 	//is load already const
 	if(this->isGravityConst)
@@ -723,10 +659,8 @@ AIDMBeamColumn::commitState()
 	}
 	if(this->CLoadFactor == 0)
 		return retVal;
-	if (!this->AIDMs[0]->checkCapacity(F(4), this->getTag()))
-		this->iAIDMTag = -2;
-	if (!this->AIDMs[1]->checkCapacity(F(10), this->getTag()))
-		this->jAIDMTag = -2;
+	this->AIDMs[0]->checkCapacity(F(4), this->getTag());
+	this->AIDMs[1]->checkCapacity(-F(10), this->getTag());
 	this->isGravityConst = true;
 }
 
@@ -755,22 +689,35 @@ AIDMBeamColumn::update(void)
 	int retVal = theCoordTransf->update();
 	// Get basic deformations
 	const Vector& v = theCoordTransf->getBasicTrialDisp();
+	//initial stiffness
+	if (!this->isInitial)
+	{
+		double L = theCoordTransf->getInitialLength();
+		// Update the transformation
+		double oneOverL = 1.0 / L;
+		double EoverL = E * oneOverL;
+		double EIyoverL3 = 3.0 * Iy * EoverL;		// 3EIy/L
+		//is elatic 
+		if(iAIDMTag == -1) 
+			AIDMs[0]->setInitialK(0);
+		else if (iAIDMTag == -2)
+		{
+			if(jAIDMTag == -1) 
+				AIDMs[0]->setInitialK(EIyoverL3);
+			else AIDMs[0]->setInitialK(EIyoverL3 * 2);
+		}
+		if (jAIDMTag == -1) AIDMs[1]->setInitialK(0);
+		else if (jAIDMTag == -2)
+		{
+			if (iAIDMTag == -1) AIDMs[1]->setInitialK(EIyoverL3);
+			else AIDMs[1]->setInitialK(EIyoverL3 * 2);
+		}
+		this->isInitial = true;
+	}
 	//IS initial 
 	retVal += AIDMs[0]->setTrialStrain(v(3));
-	retVal += AIDMs[1]->setTrialStrain(v(4));
+	retVal += AIDMs[1]->setTrialStrain(-v(4));
 
-	
-	// Length of the element
-	//double L = theCoordTransf->getInitialLength();
-	//basic stiffness matrix
-	//this->setStiffMatrix(L);
-	//BasicForce
-	//this->setBasicForce(L, v);
-	/*q(0) += q0[0];
-	q(1) += q0[1];
-	q(2) += q0[2];
-	q(3) += q0[3];
-	q(4) += q0[4];*/
 	return retVal < 0? -1: 0;
 }
 

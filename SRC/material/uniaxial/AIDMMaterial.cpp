@@ -119,7 +119,7 @@ stressSA_pos(Msa_pos), stressSA_neg(Msa_neg),
 CstrainMax(0), CstrainMin(0),
 lammda(initialLammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(height),
-afa_pos(0.0), afa_neg(0.0), isKill(false), isCKill(false)
+afa_pos(0.0), afa_neg(0.0), isKill(false), isToElastic(false), initialK(0.0), TLoadingDirectPos(true)
 {
     this->updateSkeletonParams();
 }
@@ -133,7 +133,7 @@ AIDMMaterial::AIDMMaterial(int tag, double lammda, double lammdaS, double lammda
     CstrainMax(0), CstrainMin(0),
     lammda(lammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
     needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(0.0),
-    afa_pos(0.0), afa_neg(0.0), isKill(false), isCKill(false)
+    afa_pos(0.0), afa_neg(0.0), isKill(false), isToElastic(false), initialK(0.0), TLoadingDirectPos(true)
 {
     this->updateSkeletonParams();
 }
@@ -147,7 +147,7 @@ stressSA_pos(0.0), stressSA_neg(0.0),
 CstrainMax(0), CstrainMin(0),
 lammda(initialLammda), lammdaS(0.0), lammdaSV(0.0), lammdaT_pos(0.0),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(0.0),
-afa_pos(0.0), afa_neg(0.0)
+afa_pos(0.0), afa_neg(0.0), isKill(false), isToElastic(false), initialK(0.0), TLoadingDirectPos(true)
 {
 
 }
@@ -161,23 +161,29 @@ AIDMMaterial::~AIDMMaterial()
 int 
 AIDMMaterial::setTrialStrain(double strain, double strainRate)
 {
-    //Ensure is null or not
-    if (!this->isAvailabelAIDM() || this->isCKill)
-        return 0;
-    //if strain is equal
-    auto loading_direct_pos = true;
-    if(abs(CStrain - strain) > 1E-16)
-        loading_direct_pos = CStrain < strain;
-    else if (CStrain != 0 && strain != 0)
+    //is elastic
+    if (this->isToElastic)
     {
+        TStrain = strain;
+        TStress = TStrain * K;
         return 0;
     }
-    //history maximum strain
-    auto max_strain = loading_direct_pos ? CstrainMax : CstrainMin;
-    //strain larger than history maximum value -> go on backbone
-    if ((loading_direct_pos ? strain >= max_strain : strain <= max_strain))
+    //Ensure is null or not
+    if (!this->isAvailabelAIDM() || this->isKill)
     {
-        this->setTangentOnBackbone(strain, loading_direct_pos);
+        TStrain = strain;
+        return 0;
+    }
+    if (abs(CStrain - strain) > 1E-16)
+        TLoadingDirectPos = CStrain < strain;
+    else if (strain != 0 && CStrain != 0)
+        return 0;
+    //history maximum strain
+    auto max_strain = TLoadingDirectPos ? CstrainMax : CstrainMin;
+    //strain larger than history maximum value -> go on backbone
+    if ((TLoadingDirectPos ? strain >= max_strain : strain <= max_strain))
+    {
+        this->setTangentOnBackbone(strain, TLoadingDirectPos);
         return 0;
     }
     //Unloading
@@ -189,23 +195,13 @@ AIDMMaterial::setTrialStrain(double strain, double strainRate)
     //Reload path not created
     if (max_strain == 0)
     {
-        this->setTangentOnBackbone(strain, loading_direct_pos);
+        this->setTangentOnBackbone(strain, TLoadingDirectPos);
     }
     else
     {
-        this->setReloadingTangent(strain, loading_direct_pos);
-    }
-    //is kill the element
-    bool isPost = abs(max_strain) > (loading_direct_pos ? strainC_pos : strainC_neg);
-    if (isPost && abs(loading_direct_pos ? CstressMaxFactor : CstressMinFactor) < 0.2)
-    {
-        isKill = true;
-        K = 0;
-        TStress = 0;
+        this->setReloadingTangent(strain, TLoadingDirectPos);
     }
 
-
-    
     return 0;
 }
 
@@ -240,6 +236,16 @@ void AIDMMaterial::setTangentOnBackbone(const double& strain, bool loading_direc
     // Updating TStrain TStress
     TStrain = strain;
     TStress = CStress + K * (strain - CStrain);
+    //is kill the element
+    bool isPost = abs(strain) > (loading_direct_pos ? strainC_pos : strainC_neg);
+    auto backboneMaxStress = loading_direct_pos ? stressFactor_pos * stressSA_pos :
+        stressFactor_neg * stressSA_neg;
+    bool isStressBelow = abs(TStress) / abs(backboneMaxStress) < this->killStressFactor;
+    if (K < 0 && isPost && isStressBelow)
+    {
+        K = 0;
+        TStress = 0;
+    }
 }
 
 int AIDMMaterial::setUnloadingTangent(const double& strain)
@@ -248,6 +254,9 @@ int AIDMMaterial::setUnloadingTangent(const double& strain)
     this->updateHystereticParams(strain > 0);
     //Maximum unloading stiffness
     auto min_unloading_K = CStress / CStrain;
+    //Oriented Strain Stress
+    auto oriented_strain = backbone_inidStrainFactor * (strain > 0 ? strainC_pos : -strainC_neg);
+    auto max_unloading_K = this->getStressOnBackbone(oriented_strain) / oriented_strain;
     //Caping secant stiffness
     auto secant_Kc = CStress > 0 ? stressFactor_pos * stressSA_pos / strainC_pos :
         stressFactor_neg * stressSA_neg / strainC_neg;
@@ -255,8 +264,8 @@ int AIDMMaterial::setUnloadingTangent(const double& strain)
     auto unloading_K = CStress > 0 ? secant_Kc * afa_pos : secant_Kc * afa_neg;
     //Unloading stiffness is to rigid
     K = unloading_K < min_unloading_K ? min_unloading_K : unloading_K;
+    K = K > max_unloading_K ? max_unloading_K : K;
     //Updating TStrain TStress
-    if (strain - CStrain == 0) return 0;
     auto stress = CStress + K * (strain - CStrain);
     //is balance
     if (stress * strain <= 0)
@@ -419,6 +428,8 @@ void AIDMMaterial::updateSkeletonParams()
     strainC_neg = this->getNormalValue(outputParams_neg[2], AIDMParamEnum::StrainC);
     stressFactor_neg = this->getNormalValue(outputParams_neg[3], AIDMParamEnum::StressFactor);
     needUpdateBANN = false;
+    //Set stiffness
+    //this->setInitialK(this->initialK);
 }
 
 void AIDMMaterial::updateHystereticParams(bool is_pos)
@@ -502,27 +513,63 @@ AIDMMaterial::getInitialTangent(void)
 int 
 AIDMMaterial::commitState(void)
 {
+    bool isSoften = abs(CStress) > abs(TStress);
     CStrain = TStrain;
     CStress = TStress;
     CK = K;
     Clammda = lammda;
-    isCKill = isKill;
+    CLoadingDirectPos = TLoadingDirectPos;
+    //Need to kill
+    if (this->isKill || !this->isAvailabelAIDM())
+        return 0;
     //Record Maxmum deformation
     if (CStrain > 0)
     {
+        /*if (this->initialK != 0 && abs(CStrain) > abs(strainC_pos * backbone_iniKStrainFactor))
+        {
+            this->initialK = 0;
+        }*/
+        // not the maximum deformation
         if (abs(CstrainMax) > abs(CStrain) || abs(CStrain) < backbone_inidStrainFactor * strainC_pos)
             return 0;
+        // is the new maximum deformation
         CstrainMax = CStrain;
         CstressMaxFactor = CStress / (stressFactor_pos * stressSA_pos);
         needUpdateHANN_pos = true;
+        // is post
+        bool isPost = abs(CstrainMax) > abs(strainC_pos);
+        bool isCapacitybelow = abs(CstressMaxFactor) < this->killStressFactor;
+        // need to kill
+        if (isSoften && isPost && isCapacitybelow)
+        {
+            isKill = true;
+            K = 0;
+            TStress = 0;
+        }
     }
     else
     {
+        /*if (this->initialK != 0 && abs(CStrain) > abs(strainC_neg * backbone_iniKStrainFactor))
+        {
+            this->initialK = 0;
+        }*/
+        // not the maximum deformation
         if (abs(CstrainMin) > abs(CStrain) || abs(CStrain) < backbone_inidStrainFactor * strainC_neg)
             return 0;
+        // is the new maximum deformation
         CstrainMin = CStrain;
         CstressMinFactor = CStress / (stressFactor_neg * stressSA_neg);
         needUpdateHANN_neg = true;
+        // is post
+        bool isPost = abs(CstrainMin) > abs(strainC_neg);
+        bool isCapacitybelow = abs(CstressMinFactor) < this->killStressFactor;
+        // need to kill
+        if (isSoften && isPost && isCapacitybelow)
+        {
+            isKill = true;
+            K = 0;
+            TStress = 0;
+        }
     }
     return 0;
 }
@@ -535,6 +582,7 @@ AIDMMaterial::revertToLastCommit(void)
     TStress = CStress;
     K = CK;
     lammda = Clammda;
+    TLoadingDirectPos = CLoadingDirectPos;
     needUpdateBANN = true;
     needUpdateHANN_neg = true;
     needUpdateHANN_pos = true;
@@ -630,16 +678,18 @@ bool AIDMMaterial::checkCapacity(const double& Moment, const int& eleTag)
 {
     if (!isAvailabelAIDM())
         return true;
-    auto limitFactor = 0.5;
+    auto limitFactor = 0.8;
     auto capacity = Moment < 0 ? this->stressSA_neg * this->stressFactor_neg : 
          this->stressSA_pos * this->stressFactor_pos;
      if (abs(Moment) < capacity * limitFactor)
          return true;
-     if (Moment > 0)
+     /*if (Moment > 0)
          this->stressSA_pos = abs(Moment) * ( 1 / limitFactor);
-     else this->stressSA_neg = abs(Moment)* (1 / limitFactor);
+     else this->stressSA_neg = abs(Moment)* (1 / limitFactor);*/
      opserr << "Warinning: the capacity of AIDMBeamColumn " << eleTag << " with AIDMMaterial " << this->getTag() <<
-         " is too weak: strengthen automatically."<< endln;
+         " is too weak: convert to elastic automatically."<< endln;
+     this->isToElastic = true;
+     K = this->CStress / this->CStrain;
      return false;
 }
 
@@ -654,6 +704,55 @@ double AIDMMaterial::getStressOnBackbone(const double& drift)
     return drift > 0? y * capacity : -y * capacity;
 }
 
+void AIDMMaterial::setInitialK(double iniK)
+{
+    //Initial Boundary
+    this->initialK = iniK;
+    K = this->initialK;
+    this->isToElastic = true;
+
+    /* auto initial_strain_pos = backbone_iniKStrainFactor * strainC_pos;
+    auto initial_strain_neg = backbone_iniKStrainFactor * -strainC_neg;
+    auto initial_strain_K_pos = this->getStressOnBackbone(initial_strain_pos) / initial_strain_pos;
+    auto initial_strain_K_neg = this->getStressOnBackbone(initial_strain_neg) / initial_strain_neg;
+    auto factorpos = initial_strain_K_pos / this->initialK;
+    auto factorneg = initial_strain_K_neg / this->initialK;
+    while (factorpos < 0.3 || factorneg < 0.3)
+    {
+        m_pos += 0.5; m_neg += 0.5;
+        initial_strain_K_pos = this->getStressOnBackbone(initial_strain_pos) / initial_strain_pos;
+        initial_strain_K_neg = this->getStressOnBackbone(initial_strain_neg) / initial_strain_neg;
+        factorpos = initial_strain_K_pos / this->initialK;
+        factorneg = initial_strain_K_neg / this->initialK;
+    }*/
+    
+    //auto initialMaxStressPos = K * strainC_pos * backbone_iniKStrainFactor;
+    //auto initialMaxStressNeg = K * strainC_neg * backbone_iniKStrainFactor;
+    //auto maxStressPos = stressFactor_pos * stressSA_pos;
+    //auto maxStressNeg = stressFactor_neg * stressSA_neg;
+    //bool isBeyongStress = initialMaxStressPos > 0.1 * maxStressPos || initialMaxStressNeg > 0.1 * maxStressNeg;
+    //if (isBeyongStress)
+    //{
+    //    this->initialK = 0;
+    //    return;
+    //}
+    //this->backbone_inidStrainFactor = 0.1;
+    ////Get balance 
+    //while (backbone_inidStrainFactor < 0.6)
+    //{
+    //    auto iniStressPos = this->getStressOnBackbone(strainC_pos * backbone_inidStrainFactor);
+    //    auto iniStressNeg = -this->getStressOnBackbone(-strainC_neg * backbone_inidStrainFactor);
+    //    isBeyongStress = initialMaxStressPos > iniStressPos || initialMaxStressNeg > iniStressNeg;
+    //    if (!isBeyongStress)
+    //    {
+    //        this->initialK = K;
+    //        return;
+    //    }
+    //    backbone_inidStrainFactor += 0.1;
+    //}
+    //this->initialK = K;
+    //this->backbone_inidStrainFactor = 0.1;
+}
 
 bool AIDMMaterial::isAvailabelAIDM() const
 {

@@ -91,6 +91,7 @@ public:
     int setTrialStrain(double strain, double strainRate = 0.0); 
     int setTrial(double strain, double &stress, double &tangent, double strainRate = 0.0); 
     double getStrain(void) {return TStrain;};
+    bool iskill(void) { return this->isKill; };
     double getStress(void);
     double getTangent(void);
     double getInitialTangent(void);
@@ -113,6 +114,7 @@ public:
     public:
     void setLammda(const double& shearSpan);
     bool checkCapacity(const double& Moment, const int& eleTag);
+    void setInitialK(double K);
 
   protected:
 
@@ -133,8 +135,9 @@ public:
 
   private:
       double backbone_ortStrainFactor = 1.2;
-      double backbone_inidStrainFactor = 0.05;
+      double backbone_inidStrainFactor = 0.1;
       double initialLammda = 2;
+      double killStressFactor = 0.2;
      
 
   private:
@@ -142,6 +145,7 @@ public:
       double lammdaS;
       double lammdaSV;
       double lammdaT_pos;
+      double initialK;
 
   private:
       //shape paramters
@@ -187,8 +191,11 @@ public:
     double TStress;
     double CK;
     double Clammda;
+    bool CLoadingDirectPos;
+    bool TLoadingDirectPos;
+
     bool isKill;
-    bool isCKill;
+    bool isToElastic;
 };
 
 
