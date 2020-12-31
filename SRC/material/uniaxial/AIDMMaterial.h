@@ -63,8 +63,8 @@ class AIDMMaterial : public UniaxialMaterial
       };
 
   public:
-      AIDMMaterial(int tag, double height, double width, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg);
-      AIDMMaterial(int tag, double lammda, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg);
+      AIDMMaterial(int tag, double height, double width, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg, bool ensureIniK = true);
+      AIDMMaterial(int tag, double lammda, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg, bool ensureIniK = true);
       AIDMMaterial();
     ~AIDMMaterial();
 
@@ -114,7 +114,7 @@ public:
     public:
     void setLammda(const double& shearSpan);
     bool checkCapacity(const double& Moment, const int& eleTag);
-    void setInitialK(double K);
+    void setInitialK(double K, bool isToElastic);
 
   protected:
 
@@ -138,7 +138,7 @@ public:
       double backbone_inidStrainFactor = 0.1;
       double initialLammda = 2;
       double killStressFactor = 0.2;
-     
+      int mnFactor = 1;
 
   private:
       double lammda;
@@ -193,6 +193,7 @@ public:
     double Clammda;
     bool CLoadingDirectPos;
     bool TLoadingDirectPos;
+    bool ensureIniK;
 
     bool isKill;
     bool isToElastic;

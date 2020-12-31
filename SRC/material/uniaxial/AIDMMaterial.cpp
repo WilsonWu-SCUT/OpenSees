@@ -111,7 +111,8 @@ std::vector<double> AIDMMaterial::beta_vec = { 0, 3, 0.4 };
 std::vector<double> AIDMMaterial::gamma_vec = { 0, 1, 1 };
 std::vector<double> AIDMMaterial::eta_vec = { 0, 1, 6 };
 
-AIDMMaterial::AIDMMaterial(int tag, double height, double width, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg)
+AIDMMaterial::AIDMMaterial(int tag, double height, double width, double lammdaS, double lammdaSV, double lammdaT_pos, 
+    double Msa_pos, double Msa_neg, bool ensureIniK)
 :UniaxialMaterial(tag, MAT_TAG_AIDMMaterial),
 TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
 K(0), CK(0.0),
@@ -119,13 +120,14 @@ stressSA_pos(Msa_pos), stressSA_neg(Msa_neg),
 CstrainMax(0), CstrainMin(0),
 lammda(initialLammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(height),
-afa_pos(0.0), afa_neg(0.0), isKill(false), isToElastic(false), initialK(0.0), TLoadingDirectPos(true)
+afa_pos(0.0), afa_neg(0.0), isKill(false), isToElastic(false), initialK(0.0), TLoadingDirectPos(true), ensureIniK(ensureIniK)
 {
     this->updateSkeletonParams();
 }
 
 
-AIDMMaterial::AIDMMaterial(int tag, double lammda, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg)
+AIDMMaterial::AIDMMaterial(int tag, double lammda, double lammdaS, double lammdaSV, double lammdaT_pos, 
+    double Msa_pos, double Msa_neg, bool ensureIniK)
     :UniaxialMaterial(tag, MAT_TAG_AIDMMaterial),
     TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
     K(0), CK(0.0),
@@ -133,7 +135,7 @@ AIDMMaterial::AIDMMaterial(int tag, double lammda, double lammdaS, double lammda
     CstrainMax(0), CstrainMin(0),
     lammda(lammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
     needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(0.0),
-    afa_pos(0.0), afa_neg(0.0), isKill(false), isToElastic(false), initialK(0.0), TLoadingDirectPos(true)
+    afa_pos(0.0), afa_neg(0.0), isKill(false), isToElastic(false), initialK(0.0), TLoadingDirectPos(true), ensureIniK(ensureIniK)
 {
     this->updateSkeletonParams();
 }
@@ -147,7 +149,7 @@ stressSA_pos(0.0), stressSA_neg(0.0),
 CstrainMax(0), CstrainMin(0),
 lammda(initialLammda), lammdaS(0.0), lammdaSV(0.0), lammdaT_pos(0.0),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(0.0),
-afa_pos(0.0), afa_neg(0.0), isKill(false), isToElastic(false), initialK(0.0), TLoadingDirectPos(true)
+afa_pos(0.0), afa_neg(0.0), isKill(false), isToElastic(false), initialK(0.0), TLoadingDirectPos(true), ensureIniK(false)
 {
 
 }
@@ -291,7 +293,7 @@ void AIDMMaterial::setReloadingTangent(const double& strain, bool loading_direct
     auto secant_Kc = loading_direct_pos ? stressFactor_pos * stressSA_pos / strainC_pos :
         stressFactor_neg * stressSA_neg / strainC_neg;
     //break proint maxstress with sign
-    auto brk_prt_strain_max = max_strain - (oreinted_prt_stress - brk_prt_stress) / secant_Kc;
+    auto brk_prt_strain_max = max_strain - (oreinted_prt_stress - brk_prt_stress) / this->getInitialTangent();
     //towards to oriented prt:
     bool isLargerthanBrkprtStress = loading_direct_pos ? CStress > brk_prt_stress: CStress < brk_prt_stress;
     bool isbeyondBrkprtStrainMax = loading_direct_pos ? CStrain > brk_prt_strain_max : CStrain < brk_prt_strain_max;
@@ -312,8 +314,6 @@ void AIDMMaterial::setReloadingTangent(const double& strain, bool loading_direct
         //Reloading target strain
         auto reloadingA_strain = CStrain + (brk_prt_stress - CStress) / reloadingA_K;
         bool isStrainBeyond = loading_direct_pos ? reloadingA_strain > brk_prt_strain_max: reloadingA_strain < brk_prt_strain_max;
-        if (isStrainBeyond && (max_strain - CStrain == 0))
-            return;
         K = isStrainBeyond ? reloadingB_K : reloadingA_K;
     }
     // Updating TStrain TStress
@@ -604,7 +604,8 @@ AIDMMaterial::revertToStart(void)
 UniaxialMaterial *
 AIDMMaterial::getCopy(void)
 {
-    AIDMMaterial*theCopy = new AIDMMaterial(this->getTag(), lammda, lammdaS, lammdaSV, lammdaT_pos, stressSA_pos, stressSA_neg);
+    AIDMMaterial*theCopy = new AIDMMaterial(this->getTag(), 
+        lammda, lammdaS, lammdaSV, lammdaT_pos, stressSA_pos, stressSA_neg, this->ensureIniK);
     theCopy->TStrain = TStrain;
     theCopy->CStress = CStress;
     theCopy->CStrain = CStrain;
@@ -698,60 +699,51 @@ double AIDMMaterial::getStressOnBackbone(const double& drift)
     auto m = drift > 0 ? m_pos : m_neg;
     auto n = drift > 0 ? n_pos : n_neg;
     auto dc = drift > 0 ? strainC_pos : strainC_neg;
+    //interpolation for m value
+    if (abs(drift) < dc)
+    {
+        auto mMax = m * mnFactor;
+        auto nMin = n / mnFactor < 1 ? 1.5 : n / mnFactor;
+        auto coe_BM = mMax;
+        auto coe_AM = (m - coe_BM) / pow(dc, 1);
+        auto coe_BN = nMin;
+        auto coe_AN = (n - coe_BN) / pow(dc, 1);
+        m = coe_AM * pow(drift, 1) + coe_BM;
+        n = coe_AN * pow(drift, 1) + coe_BN;
+    }
     auto capacity = drift > 0 ? stressFactor_pos * stressSA_pos : stressFactor_neg * stressSA_neg;
     auto x = abs(drift / dc);
     auto y = (m * x) / (1 + (m - (n / (n - 1))) * x + pow(x, n) / (n - 1));
     return drift > 0? y * capacity : -y * capacity;
 }
 
-void AIDMMaterial::setInitialK(double iniK)
+void AIDMMaterial::setInitialK(double iniK, bool isToElastic)
 {
     //Initial Boundary
     this->initialK = iniK;
-    K = this->initialK;
-    this->isToElastic = true;
-
-    /* auto initial_strain_pos = backbone_iniKStrainFactor * strainC_pos;
-    auto initial_strain_neg = backbone_iniKStrainFactor * -strainC_neg;
-    auto initial_strain_K_pos = this->getStressOnBackbone(initial_strain_pos) / initial_strain_pos;
-    auto initial_strain_K_neg = this->getStressOnBackbone(initial_strain_neg) / initial_strain_neg;
-    auto factorpos = initial_strain_K_pos / this->initialK;
-    auto factorneg = initial_strain_K_neg / this->initialK;
-    while (factorpos < 0.3 || factorneg < 0.3)
+    mnFactor = 1;
+    //Elastic
+    this->isToElastic = isToElastic;
+    if (this->isToElastic)
     {
-        m_pos += 0.5; m_neg += 0.5;
-        initial_strain_K_pos = this->getStressOnBackbone(initial_strain_pos) / initial_strain_pos;
-        initial_strain_K_neg = this->getStressOnBackbone(initial_strain_neg) / initial_strain_neg;
+        K = this->initialK;
+        return;
+    }
+    else if (!this->ensureIniK) return;
+    auto initial_strain_pos = backbone_inidStrainFactor * strainC_pos;
+    auto initial_strain_neg = backbone_inidStrainFactor * -strainC_neg;
+    auto factorpos = 0.0;
+    auto factorneg = 0.0;
+    while (factorpos < 0.8 && factorneg < 0.8)
+    {
+        mnFactor += 1;
+        auto initial_strain_K_pos = this->getStressOnBackbone(initial_strain_pos) / initial_strain_pos;
+        auto initial_strain_K_neg = this->getStressOnBackbone(initial_strain_neg) / initial_strain_neg;
         factorpos = initial_strain_K_pos / this->initialK;
         factorneg = initial_strain_K_neg / this->initialK;
-    }*/
-    
-    //auto initialMaxStressPos = K * strainC_pos * backbone_iniKStrainFactor;
-    //auto initialMaxStressNeg = K * strainC_neg * backbone_iniKStrainFactor;
-    //auto maxStressPos = stressFactor_pos * stressSA_pos;
-    //auto maxStressNeg = stressFactor_neg * stressSA_neg;
-    //bool isBeyongStress = initialMaxStressPos > 0.1 * maxStressPos || initialMaxStressNeg > 0.1 * maxStressNeg;
-    //if (isBeyongStress)
-    //{
-    //    this->initialK = 0;
-    //    return;
-    //}
-    //this->backbone_inidStrainFactor = 0.1;
-    ////Get balance 
-    //while (backbone_inidStrainFactor < 0.6)
-    //{
-    //    auto iniStressPos = this->getStressOnBackbone(strainC_pos * backbone_inidStrainFactor);
-    //    auto iniStressNeg = -this->getStressOnBackbone(-strainC_neg * backbone_inidStrainFactor);
-    //    isBeyongStress = initialMaxStressPos > iniStressPos || initialMaxStressNeg > iniStressNeg;
-    //    if (!isBeyongStress)
-    //    {
-    //        this->initialK = K;
-    //        return;
-    //    }
-    //    backbone_inidStrainFactor += 0.1;
-    //}
-    //this->initialK = K;
-    //this->backbone_inidStrainFactor = 0.1;
+        if (mnFactor == 5)
+            return;
+    }
 }
 
 bool AIDMMaterial::isAvailabelAIDM() const

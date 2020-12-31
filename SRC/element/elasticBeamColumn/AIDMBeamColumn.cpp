@@ -699,18 +699,21 @@ AIDMBeamColumn::update(void)
 		double EIyoverL3 = 3.0 * Iy * EoverL;		// 3EIy/L
 		//is elatic 
 		if(iAIDMTag == -1) 
-			AIDMs[0]->setInitialK(0);
-		else if (iAIDMTag == -2)
+			AIDMs[0]->setInitialK(0, true);
+		else
 		{
-			if(jAIDMTag == -1) 
-				AIDMs[0]->setInitialK(EIyoverL3);
-			else AIDMs[0]->setInitialK(EIyoverL3 * 2);
+			bool isElastic = iAIDMTag == -2;
+			if (jAIDMTag == -1)
+				AIDMs[0]->setInitialK(EIyoverL3, isElastic);
+			else AIDMs[0]->setInitialK(EIyoverL3 * 2, isElastic);
 		}
-		if (jAIDMTag == -1) AIDMs[1]->setInitialK(0);
-		else if (jAIDMTag == -2)
+		if (jAIDMTag == -1) AIDMs[1]->setInitialK(0, true);
+		else 
 		{
-			if (iAIDMTag == -1) AIDMs[1]->setInitialK(EIyoverL3);
-			else AIDMs[1]->setInitialK(EIyoverL3 * 2);
+			bool isElastic = jAIDMTag == -2;
+			if (jAIDMTag == -1)
+				AIDMs[1]->setInitialK(EIyoverL3, isElastic);
+			else AIDMs[1]->setInitialK(EIyoverL3 * 2, isElastic);
 		}
 		this->isInitial = true;
 	}
