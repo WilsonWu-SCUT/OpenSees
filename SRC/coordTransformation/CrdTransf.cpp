@@ -113,6 +113,13 @@ CrdTransf::getBasicDisplSensitivity(int gradNumber)
     return dummy;
 }
 
+
+bool CrdTransf::setnodeOffset(const Vector& rigJntOffset, bool isI)
+{
+    opserr << "CrdTransf::setnodeOffset: method need to be override!\n";
+    return false;
+}
+
 const Vector &
 CrdTransf::getGlobalResistingForceShapeSensitivity(const Vector &pb,
 						   const Vector &p0,

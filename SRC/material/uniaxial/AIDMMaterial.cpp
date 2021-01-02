@@ -110,6 +110,7 @@ std::vector<double> AIDMMaterial::afa_vec = { 0, 5, 1 };
 std::vector<double> AIDMMaterial::beta_vec = { 0, 3, 0.4 };
 std::vector<double> AIDMMaterial::gamma_vec = { 0, 1, 1 };
 std::vector<double> AIDMMaterial::eta_vec = { 0, 1, 6 };
+int AIDMMaterial::predict_num = 0;
 
 AIDMMaterial::AIDMMaterial(int tag, double height, double width, double lammdaS, double lammdaSV, double lammdaT_pos, 
     double Msa_pos, double Msa_neg, bool ensureIniK)
@@ -157,7 +158,14 @@ afa_pos(0.0), afa_neg(0.0), isKill(false), isToElastic(false), initialK(0.0), TL
 
 AIDMMaterial::~AIDMMaterial()
 {
+    if (AIDMMaterial::predict_num != 0)
+    {
+        opserr << "Neural networks were utilizied for " << AIDMMaterial::predict_num << " times\n";
+        AIDMMaterial::predict_num = 0;
+    }
   // does nothing
+    
+
 }
 
 int 
@@ -401,7 +409,7 @@ float AIDMMaterial::getNormalValue(const double& value, const AIDMParamEnum& typ
 std::vector<float> AIDMMaterial::getComponentParamsVec(bool is_pos)
 {
     std::vector<float> vec = {};
-    auto lammda_reg = this->getRegularizedValue(lammda, AIDMParamEnum::Lammda);
+    auto lammda_reg = this->getRegularizedValue(this->lammda, AIDMParamEnum::Lammda);
     auto lammdas_reg = this->getRegularizedValue(lammdaS, AIDMParamEnum::LammdaS);
     auto lammdasv_reg = this->getRegularizedValue(lammdaSV, AIDMParamEnum::LammdaSV);
     auto lammdat_reg = this->getRegularizedValue(is_pos? lammdaT_pos : 1/ lammdaT_pos, AIDMParamEnum::LammdaT);
@@ -428,8 +436,7 @@ void AIDMMaterial::updateSkeletonParams()
     strainC_neg = this->getNormalValue(outputParams_neg[2], AIDMParamEnum::StrainC);
     stressFactor_neg = this->getNormalValue(outputParams_neg[3], AIDMParamEnum::StressFactor);
     needUpdateBANN = false;
-    //Set stiffness
-    //this->setInitialK(this->initialK);
+    AIDMMaterial::predict_num += 2;
 }
 
 void AIDMMaterial::updateHystereticParams(bool is_pos)
@@ -483,6 +490,7 @@ void AIDMMaterial::updateHystereticParams(bool is_pos)
         eta_neg = this->getNormalValue(outputParams[3], AIDMParamEnum::Eta);
         needUpdateHANN_neg = false;
     }
+    AIDMMaterial::predict_num += 1;
 }
 
 double 
@@ -655,16 +663,13 @@ AIDMMaterial::updateParameter(int parameterID, Information &info)
 
 void AIDMMaterial::setLammda(const double& shearSpan)
 {
+    //return;
     if (this->sectionHeight == 0)
         return;
     auto Lammda = abs(shearSpan) / this->sectionHeight;
-    if (Lammda < 0.5 || Lammda > 5)
-    {
-        int i = 1;
-    }
     Lammda = Lammda < 0.5 ? 0.5 : Lammda;
     Lammda = Lammda > 5 ? 5 : Lammda;
-    if (abs(this->lammda - Lammda) > 0.5)
+    if (abs(this->lammda - Lammda) > 0.2)
     {
         this->lammda = Lammda;
         needUpdateBANN = true;

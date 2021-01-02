@@ -330,6 +330,7 @@ void* OPS_AIDMBeamColumn(void)
 	SectionForceDeformation* theSection = 0;
 	CrdTransf* theTrans = 0;
 	double data[6];
+	double rigidEnd[2];
 	int transfTag, secTag;
 
 	//Section stiffness
@@ -352,9 +353,15 @@ void* OPS_AIDMBeamColumn(void)
 	{
 		vec.push_back(aidmTags[i]);
 	}
-
+	//RigidEnds
+	numData = 2;
+	if (OPS_GetDoubleInput(&numData, &rigidEnd[0]) < 0)
+	{
+		rigidEnd[0] = 0;
+		rigidEnd[1] = 0;
+	}
 	return new AIDMBeamColumn(iData[0], data[0], data[1], data[2], data[3], data[4],
-		data[5], iData[1], iData[2], *theTrans, vec);
+		data[5], iData[1], iData[2], *theTrans, vec, rigidEnd[0], rigidEnd[1]);
 }
 
 AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
@@ -368,7 +375,7 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
 	// allocate memory for numMaterials1d uniaxial material models
 	AIDMs = new AIDMMaterial * [numAidms];
 
-	this->initialAIDMBeamColumn(Nd1, Nd2, theTransf);
+	this->initialAIDMBeamColumn(Nd1, Nd2, theTransf, 0 , 0);
 
 	// get a copy of the material objects and check we obtained a valid copy
 	for (int i = 0; i < numAIDMs; i++) {
@@ -394,7 +401,7 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
 	iAIDMTag = tag_vec[0]; jAIDMTag = tag_vec[1];
 //	iAIDMTag = -2; jAIDMTag = -2;
 
-	this->initialAIDMBeamColumn(Nd1, Nd2, theTransf);
+	this->initialAIDMBeamColumn(Nd1, Nd2, theTransf, 0, 0);
 
 	// get a copy of the material objects and check we obtained a valid copy
 	for (int i = 0; i < numAIDMs; i++) {
@@ -416,87 +423,46 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
 	
 }
 
+AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
+	double Jx, double Iy, double Iz,
+	int Nd1, int Nd2, CrdTransf& theTransf, const std::vector<int> tag_vec, const double& rigidILength, const double& rigidJLength)
+	:Element(tag, ELE_TAG_AIDMBeamColumn),
+	A(A), E(E), G(G), Jx(Jx), Iy(Iy), Iz(Iz),
+	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0),
+	numAIDMs(tag_vec.size()), isGravityConst(false), CLoadFactor(0.0), TLoadFactor(0.0), isInitial(false)
+{
+	// allocate memory for numMaterials1d uniaxial material models
+	AIDMs = new AIDMMaterial * [numAIDMs];
+	iAIDMTag = tag_vec[0]; jAIDMTag = tag_vec[1];
+
+	this->initialAIDMBeamColumn(Nd1, Nd2, theTransf, rigidILength, rigidJLength);
+
+	// get a copy of the material objects and check we obtained a valid copy
+	for (int i = 0; i < numAIDMs; i++) {
+		if (tag_vec[i] < 0)
+		{
+			AIDMs[i] = new AIDMMaterial();
+		}
+		else
+		{
+			AIDMs[i] = dynamic_cast<AIDMMaterial*>(OPS_getUniaxialMaterial(tag_vec[i])->getCopy());
+			if (AIDMs[i] == 0)
+			{
+				opserr << "WARNING no material " << tag_vec[i] <<
+					"exitsts - element AIDMBeamColumn\n";
+				exit(-1);
+			}
+		}
+	}
+
+}
+
 AIDMBeamColumn::AIDMBeamColumn()
 	:Element(0, ELE_TAG_AIDMBeamColumn),
 	A(0.0), E(0.0), G(0.0), Jx(0.0), Iy(0.0), Iz(0.0),
-	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0)
+	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), initialLength(0)
 {
 	// does nothing
-	q0[0] = 0.0;
-	q0[1] = 0.0;
-	q0[2] = 0.0;
-	q0[3] = 0.0;
-	q0[4] = 0.0;
-
-	p0[0] = 0.0;
-	p0[1] = 0.0;
-	p0[2] = 0.0;
-	p0[3] = 0.0;
-	p0[4] = 0.0;
-
-	// set node pointers to NULL
-	for (int i = 0; i < 2; i++)
-		theNodes[i] = 0;
-}
-
-AIDMBeamColumn::AIDMBeamColumn(int tag, double a, double e, double g,
-	double jx, double iy, double iz, int Nd1, int Nd2,
-	CrdTransf& coordTransf, double r, int cm, int sectTag)
-	:Element(tag, ELE_TAG_AIDMBeamColumn),
-	A(a), E(e), G(g), Jx(jx), Iy(iy), Iz(iz),
-	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0)
-{
-	connectedExternalNodes(0) = Nd1;
-	connectedExternalNodes(1) = Nd2;
-
-	theCoordTransf = coordTransf.getCopy3d();
-
-	if (!theCoordTransf) {
-		opserr << "ElasticBeam3d::ElasticBeam3d -- failed to get copy of coordinate transformation\n";
-		exit(-1);
-	}
-
-	q0[0] = 0.0;
-	q0[1] = 0.0;
-	q0[2] = 0.0;
-	q0[3] = 0.0;
-	q0[4] = 0.0;
-
-	p0[0] = 0.0;
-	p0[1] = 0.0;
-	p0[2] = 0.0;
-	p0[3] = 0.0;
-	p0[4] = 0.0;
-
-	// set node pointers to NULL
-	for (int i = 0; i < 2; i++)
-		theNodes[i] = 0;
-}
-
-AIDMBeamColumn::AIDMBeamColumn(int tag, double a, double e, double g,
-	double jx, double iy, double iz, int Nd1, int Nd2,
-	CrdTransf& coordTransf, int release, int monitorPointNum,
-	double r, int cm, int sectTag)
-	:Element(tag, ELE_TAG_AIDMBeamColumn),
-	A(a), E(e), G(g), Jx(jx), Iy(iy), Iz(iz),
-	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0)
-{
-	connectedExternalNodes(0) = Nd1;
-	connectedExternalNodes(1) = Nd2;
-
-	theCoordTransf = coordTransf.getCopy3d();
-
-	//Monitor Points
-	auto deltaL = 1.0 / (monitorPointNum + 1);
-	//input
-	for (int i = 1; i <= monitorPointNum + 1; i++)
-		monitorPos.push_back(deltaL * i);
-
-	if (!theCoordTransf) {
-		opserr << "ElasticBeam3d::ElasticBeam3d -- failed to get copy of coordinate transformation\n";
-		exit(-1);
-	}
-
 	q0[0] = 0.0;
 	q0[1] = 0.0;
 	q0[2] = 0.0;
@@ -520,7 +486,7 @@ AIDMBeamColumn::~AIDMBeamColumn()
 		delete theCoordTransf;
 }
 
-void AIDMBeamColumn::initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTransf)
+void AIDMBeamColumn::initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTransf, const double& rigidILength, const double& rigidJLength)
 {
 	connectedExternalNodes(0) = Nd1;
 	connectedExternalNodes(1) = Nd2;
@@ -528,7 +494,7 @@ void AIDMBeamColumn::initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTrans
 	theCoordTransf = theTransf.getCopy3d();
 
 	if (!theCoordTransf) {
-		opserr << "ElasticBeam3d::ElasticBeam3d -- failed to get copy of coordinate transformation\n";
+		opserr << "AIDMBeamColumn::AIDMBeamColumn -- failed to get copy of coordinate transformation\n";
 		exit(-1);
 	}
 
@@ -547,6 +513,58 @@ void AIDMBeamColumn::initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTrans
 	// set node pointers to NULL
 	for (int i = 0; i < 2; i++)
 		theNodes[i] = 0;
+
+	//rigid End not Exist
+	if (rigidILength <= 0 && rigidJLength <= 0)
+		return;
+
+	int nodeID[1];
+	int size[1];
+	double nodeCrdI[3];
+	double nodeCrdJ[3];
+	double direction[3];
+	size[0] = 3;
+	nodeID[0] = Nd1;
+	OPS_GetNodeCrd(nodeID, size, nodeCrdI);
+	nodeID[0] = Nd2;
+	OPS_GetNodeCrd(nodeID, size, nodeCrdJ);
+	//Calculate initial Length
+	this->initialLength = sqrt(pow(nodeCrdJ[0] - nodeCrdI[0], 2) + pow(nodeCrdJ[1] - nodeCrdI[1], 2) +
+		pow(nodeCrdJ[2] - nodeCrdI[2], 2));
+	//is End beyond
+	if (rigidILength + rigidJLength >= this->initialLength * 0.9)
+	{
+		opserr << "AIDMBeamColumn::AIDMBeamColumn -- failed to create rigid end: length is out of range.\n";
+		return;
+	}
+	//Calculate vector direction
+	for(int i = 0; i < 3 ; i++)
+		direction[i] = nodeCrdJ[i] - nodeCrdI[i];
+	//I end 
+	if (rigidILength > 0)
+	{
+		auto factor = rigidILength / this->initialLength;
+		Vector jntOffset(3);
+		for (int i = 0; i < 3; i++)
+			jntOffset(i) = direction[i] * factor;
+		this->theCoordTransf->setnodeOffset(jntOffset, true);
+	}
+	if (rigidJLength > 0)
+	{
+		auto factor = -rigidJLength / this->initialLength;
+		Vector jntOffset(3);
+		for (int i = 0; i < 3; i++)
+			jntOffset(i) = direction[i] * factor;
+		this->theCoordTransf->setnodeOffset(jntOffset, false);
+	}
+}
+
+void AIDMBeamColumn::setRigidEnd(const double& rigidLength, bool isI, double* direction)
+{
+	auto factor = (isI ? rigidLength : -rigidLength) / this->initialLength;
+	Vector jntOffset(3);
+	for (int i = 0; i < 3; i++)
+		jntOffset(i) = direction[i] * factor;
 }
 
 int
@@ -1306,7 +1324,13 @@ AIDMBeamColumn::setResponse(const char** argv, int argc, OPS_Stream& output)
 			ss_stress << "stress" << i;
 			output.tag("ResponseType", ss_stress.str().c_str());
 		}
-		theResponse = new ElementResponse(this, 6, Vector(this->numAIDMs * 2));
+		for (int i = 0; i < this->numAIDMs; i++)
+		{
+			std::stringstream ss_stress;
+			ss_stress << "lammda" << i;
+			output.tag("ResponseType", ss_stress.str().c_str());
+		}
+		theResponse = new ElementResponse(this, 6, Vector(this->numAIDMs * 3));
 	}
 	output.endTag(); // ElementOutput
 
@@ -1318,7 +1342,7 @@ AIDMBeamColumn::getResponse(int responseID, Information& eleInfo)
 {
 	static Vector Res(12);
 	Res = this->getResistingForce();
-	static Vector strainStress(this->numAIDMs * 2);
+	static Vector strainStress(this->numAIDMs * 3);
 	for (int i = 0; i < this->numAIDMs; i++)
 	{
 		strainStress(i) = this->AIDMs[i]->getStrain();
@@ -1326,6 +1350,10 @@ AIDMBeamColumn::getResponse(int responseID, Information& eleInfo)
 	for (int i = 0; i < this->numAIDMs; i++)
 	{
 		strainStress(i + this->numAIDMs) = this->AIDMs[i]->getStress();
+	}
+	for (int i = 0; i < this->numAIDMs; i++)
+	{
+		strainStress(i + this->numAIDMs * 2) = this->AIDMs[i]->getLammda();
 	}
 	switch (responseID) {
 	case 1: // stiffness

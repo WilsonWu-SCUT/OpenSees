@@ -84,6 +84,7 @@ class AIDMMaterial : public UniaxialMaterial
      static std::vector<double> beta_vec;
      static std::vector<double> gamma_vec;
      static std::vector<double> eta_vec;
+     static int predict_num;
 
 public:
     const char *getClassType(void) const {return "AIDMMaterial";};
@@ -92,6 +93,7 @@ public:
     int setTrial(double strain, double &stress, double &tangent, double strainRate = 0.0); 
     double getStrain(void) {return TStrain;};
     bool iskill(void) { return this->isKill; };
+    double getLammda(void) { return this->Clammda; }
     double getStress(void);
     double getTangent(void);
     double getInitialTangent(void);
@@ -136,7 +138,7 @@ public:
   private:
       double backbone_ortStrainFactor = 1.2;
       double backbone_inidStrainFactor = 0.1;
-      double initialLammda = 2;
+      double initialLammda = 4;
       double killStressFactor = 0.2;
       int mnFactor = 1;
 

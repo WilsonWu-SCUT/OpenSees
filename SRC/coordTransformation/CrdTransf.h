@@ -71,6 +71,8 @@ public:
     virtual const Vector &getBasicIncrDeltaDisp(void) = 0;
     virtual const Vector &getBasicTrialVel(void) = 0;
     virtual const Vector &getBasicTrialAccel(void) = 0;
+
+    virtual bool setnodeOffset(const Vector& rigJntOffset, bool isI);
     
     // AddingSensitivity:BEGIN //////////////////////////////////
     virtual const Vector &getBasicDisplSensitivity(int gradNumber);

@@ -58,18 +58,9 @@ class AIDMBeamColumn : public Element
     AIDMBeamColumn(int tag, double A, double E, double G,
         double Jx, double Iy, double Iz,
         int Nd1, int Nd2, CrdTransf& theTransf, const std::vector<int> tag_vec);
-
     AIDMBeamColumn(int tag, double A, double E, double G,
-		  double Jx, double Iy, double Iz,
-          int Nd1, int Nd2, CrdTransf &theTransf,
-          double rho = 0.0, int cMass = 0,
-          int sectionTag = 0);
-    AIDMBeamColumn(int tag, double A, double E, double G,
-		double Jx, double Iy, double Iz,
-		int Nd1, int Nd2, CrdTransf& theTransf, 
-        int Release, int monitorPointNum,
-		double rho = 0.0, int cMass = 0,
-		int sectionTag = 0);
+        double Jx, double Iy, double Iz,
+        int Nd1, int Nd2, CrdTransf& theTransf, const std::vector<int> tag_vec, const double& rigidILength, const double& rigidJLength);
 
     ~AIDMBeamColumn();
 
@@ -112,7 +103,8 @@ class AIDMBeamColumn : public Element
     int updateParameter (int parameterID, Information &info);
 
 private:
-    void initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTransf);
+    void initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTransf, const double& rigidILength, const double& rigidJLength);
+    void setRigidEnd(const double& rigidLength, bool isI, double* direction);
 	void setStiffMatrix(const double& length);
 	void setBasicForce(const double& length, const Vector& v);
 	int addPointLoad(const double& N, const double& Py, const double& Pz,
@@ -130,6 +122,7 @@ private:
       double CLoadFactor;
 
       bool isInitial;
+      double initialLength;
 
   private:
     double A,E,G,Jx,Iy,Iz;

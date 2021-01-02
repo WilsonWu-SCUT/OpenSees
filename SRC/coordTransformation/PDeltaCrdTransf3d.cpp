@@ -124,28 +124,9 @@ nodeIInitialDisp(0), nodeJInitialDisp(0), initialDispChecked(false)
         R[2][2] = vecInLocXZPlane(2);
         
         // check rigid joint offset for node I
-        if (&rigJntOffset1 == 0 || rigJntOffset1.Size() != 3 ) {
-            opserr << "PDeltaCrdTransf3d::PDeltaCrdTransf3d:  Invalid rigid joint offset vector for node I\n";
-            opserr << "Size must be 3\n";      
-        }
-        else if (rigJntOffset1.Norm() > 0.0) {
-            nodeIOffset = new double[3];
-            nodeIOffset[0] = rigJntOffset1(0);
-            nodeIOffset[1] = rigJntOffset1(1);
-            nodeIOffset[2] = rigJntOffset1(2);
-        }
-        
+        this->setnodeOffset(rigJntOffset1, true);
         // check rigid joint offset for node J
-        if (&rigJntOffset2 == 0 || rigJntOffset2.Size() != 3 ) {
-            opserr << "PDeltaCrdTransf3d::PDeltaCrdTransf3d:  Invalid rigid joint offset vector for node J\n";
-            opserr << "Size must be 3\n";      
-        }
-        else if (rigJntOffset2.Norm() > 0.0) {
-            nodeJOffset = new double[3];
-            nodeJOffset[0] = rigJntOffset2(0);
-            nodeJOffset[1] = rigJntOffset2(1);
-            nodeJOffset[2] = rigJntOffset2(2);
-        }
+        this->setnodeOffset(rigJntOffset2, false);
 }
 
 
@@ -1205,6 +1186,35 @@ PDeltaCrdTransf3d::getInitialGlobalStiffMatrix(const Matrix &KB)
         }
         
         return kg;
+}
+
+
+
+bool PDeltaCrdTransf3d::setnodeOffset(const Vector& rigJntOffset, bool isI)
+{
+    // check rigid joint offset for node I
+    if (&rigJntOffset == 0 || rigJntOffset.Size() != 3) {
+        opserr << "PDeltaCrdTransf3d::PDeltaCrdTransf3d:  Invalid rigid joint offset vector for node " << (isI ? "I" : "J") << "\n";
+        opserr << "Size must be 3\n";
+        return false;
+    }
+    if (rigJntOffset.Norm() <= 0.0) return false;
+    if (isI)
+    {
+        nodeIOffset = new double[3];
+        nodeIOffset[0] = rigJntOffset(0);
+        nodeIOffset[1] = rigJntOffset(1);
+        nodeIOffset[2] = rigJntOffset(2);
+        return true;
+    }
+    else
+    {
+        nodeJOffset = new double[3];
+        nodeJOffset[0] = rigJntOffset(0);
+        nodeJOffset[1] = rigJntOffset(1);
+        nodeJOffset[2] = rigJntOffset(2);
+        return true;
+    }
 }
 
 
