@@ -91,6 +91,9 @@
 
 //#include <McftSection2dfiber.h>
 
+//Wilson
+#include "PMMSection.h"
+
 #include <string.h>
 #include <fstream>
 using std::ifstream;
@@ -118,6 +121,8 @@ extern void *OPS_RCTunnelSection(void);
 extern void *OPS_UniaxialSection(void);
 extern void *OPS_TubeSection(void);
 extern void *OPS_ParallelSection(void);
+//Wilson
+extern void* OPS_PMMSectionRectBeam(void); //Wilson
 
 int
 TclCommand_addFiberSection (ClientData clientData, Tcl_Interp *interp, int argc,
@@ -176,6 +181,14 @@ TclModelBuilderSectionCommand (ClientData clientData, Tcl_Interp *interp, int ar
       else 
 	return TCL_ERROR;
     }	
+
+	else if (strcmp(argv[1], "PMMSectionRectBeam") == 0) {
+		void* theMat = OPS_PMMSectionRectBeam();
+		if (theMat != 0)
+			theSection = (SectionForceDeformation*)theMat;
+		else
+			return TCL_ERROR;
+	}
 
     else if (strcmp(argv[1],"ElasticWarpingShear") == 0) {
       void *theMat = OPS_ElasticWarpingShearSection2d();

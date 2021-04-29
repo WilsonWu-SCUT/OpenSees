@@ -307,6 +307,7 @@
     <ClCompile Include="..\..\..\SRC\material\section\LayeredShellFiberSectionThermal.cpp" />
     <ClCompile Include="..\..\..\SRC\material\section\MembranePlateFiberSectionThermal.cpp" />
     <ClCompile Include="..\..\..\SRC\material\section\NDFiberSectionWarping2d.cpp" />
+    <ClCompile Include="..\..\..\SRC\material\section\PMMSection.cpp" />
     <ClCompile Include="..\..\..\SRC\material\section\TimoshenkoSection3d.cpp" />
     <ClCompile Include="..\..\..\SRC\material\section\WFFiberSection2d.cpp" />
     <ClCompile Include="..\..\..\SRC\material\section\WSection2d.cpp" />
@@ -721,6 +722,7 @@
     <ClInclude Include="..\..\..\SRC\material\section\LayeredShellFiberSectionThermal.h" />
     <ClInclude Include="..\..\..\SRC\material\section\MembranePlateFiberSectionThermal.h" />
     <ClInclude Include="..\..\..\SRC\material\section\NDFiberSectionWarping2d.h" />
+    <ClInclude Include="..\..\..\SRC\material\section\PMMSection.h" />
     <ClInclude Include="..\..\..\SRC\material\section\TimoshenkoSection3d.h" />
     <ClInclude Include="..\..\..\SRC\material\section\WFFiberSection2d.h" />
     <ClInclude Include="..\..\..\SRC\material\section\WSection2d.h" />

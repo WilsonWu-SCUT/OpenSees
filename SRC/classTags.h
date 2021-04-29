@@ -225,7 +225,7 @@
 #define MAT_TAG_QzSimple2                    212
 #define MAT_TAG_SteelBRB                     213
 #define MAT_TAG_PySimple3                    214
-#define MAT_TAG_AIDMMaterial			 301
+#define MAT_TAG_AIDMMaterial			 301	//WilsonWu
 
 
 
@@ -314,6 +314,8 @@
 #define SEC_TAG_MembranePlateFiberSectionThermal 34  // L.Jiang[SIF]
 #define SEC_TAG_LayeredShellFiberSectionThermal 35     //L.Jiang[SIF]
 #define SEC_TAG_BiaxialHysteretic 36
+
+#define SEC_TAG_PMMSection 101		//WilsonWu
 
 #define SEC_TAG_MCFTFiberSection2d 7601
 
@@ -761,7 +763,7 @@
 #define ELE_TAG_PML3D                     201
 #define ELE_TAG_PML2D                     202
 #define ELE_TAG_ExternalElement           99990
-#define ELE_TAG_AIDMBeamColumn				301
+#define ELE_TAG_AIDMBeamColumn				301 //WilsonWu
 
 
 

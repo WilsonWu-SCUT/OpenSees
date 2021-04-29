@@ -104,6 +104,8 @@ extern void *OPS_ModElasticBeam2d(void);
 extern void *OPS_ElasticBeam2d(const ID &info);
 extern void *OPS_ElasticBeam3d(void);
 extern void* OPS_AIDMBeamColumn(void);
+extern void* OPS_MixedBeamColumn2d(void);
+extern void* OPS_MixedBeamColumn3d(void);
 extern void *OPS_ElasticTimoshenkoBeam2d(void);
 extern void *OPS_ElasticTimoshenkoBeam3d(void);
 extern void *OPS_TPB1D(void);
@@ -505,6 +507,20 @@ TclModelBuilderElementCommand(ClientData clientData, Tcl_Interp *interp,
       return TCL_ERROR;
   }
   }
+  else if (strcmp(argv[1], "MixedBeamColumn") == 0) {
+  Element* theEle = 0;
+  if (OPS_GetNDM() == 2)
+      theEle = (Element*)OPS_MixedBeamColumn2d();
+  else
+      theEle = (Element*)OPS_MixedBeamColumn3d();
+
+  if (theEle != 0)
+      theElement = theEle;
+  else {
+      opserr << "TclElementCommand -- unable to create element of type : " << argv[1] << endln;
+      return TCL_ERROR;
+  }
+}
 
   else if (strcmp(argv[1], "gradientInelasticBeamColumn") == 0) {
     Element *theEle = 0;
