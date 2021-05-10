@@ -45,8 +45,7 @@ class Response;
 class Renderer;
 class AIDMMaterial;
 class UniaxialMaterial;
-
-
+class PMMSection;
 
 class AIDMBeamColumn : public Element
 {
@@ -54,14 +53,10 @@ class AIDMBeamColumn : public Element
     AIDMBeamColumn();
     AIDMBeamColumn(int tag, double A, double E, double G,
         double Jx, double Iy, double Iz,
-        int Nd1, int Nd2, CrdTransf& theTransf, int numAidms, UniaxialMaterial** aidms);
-    AIDMBeamColumn(int tag, double A, double E, double G,
-        double Jx, double Iy, double Iz,
-        int Nd1, int Nd2, CrdTransf& theTransf, const std::vector<int> tag_vec);
-    AIDMBeamColumn(int tag, double A, double E, double G,
-        double Jx, double Iy, double Iz,
         int Nd1, int Nd2, CrdTransf& theTransf, const std::vector<int> tag_vec, const double& rigidILength, const double& rigidJLength);
-
+    AIDMBeamColumn(int tag, int Nd1, int Nd2, CrdTransf& theTransf, 
+        const std::vector<int> tag_vec,
+        const double& rigidILength, const double& rigidJLength);
     ~AIDMBeamColumn();
 
     const char *getClassType(void) const {return "AIDMBeamColumn";};
@@ -103,31 +98,41 @@ class AIDMBeamColumn : public Element
     int updateParameter (int parameterID, Information &info);
 
 private:
+    /*AIDMBeamColumn初始化*/
     void initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTransf, const double& rigidILength, const double& rigidJLength);
+    /*设定刚域*/
     void setRigidEnd(const double& rigidLength, bool isI, double* direction);
+    /*设定刚度矩阵*/
 	void setStiffMatrix(const double& length);
 	void setBasicForce(const double& length, const Vector& v);
+    /*添加节点荷载*/
 	int addPointLoad(const double& N, const double& Py, const double& Pz,
 		const double& aOverL, const double& length);
+    /*添加任意荷载*/
 	void addGeneralPartialLoad(const double& Ni, const double& Nj, const double& Pyi,
 		const double& Pyj, const double& Pzi, const double& Pzj,
 		const double& aOverL, const double& bOverL, const double& length);
-    bool isAvailabelAIDM() const;
 
   private:
+      /*AIDM编号*/
       int iAIDMTag;
       int jAIDMTag;
+      /*通过恒在判断是否转化为弹性*/
       bool isGravityConst;
       double TLoadFactor;
       double CLoadFactor;
 
+      /*是否初始化*/
       bool isInitial;
+      /*初始化长度*/
       double initialLength;
 
   private:
     double A,E,G,Jx,Iy,Iz;
 
+    /*AIDM材料指针*/
     AIDMMaterial** AIDMs;
+    PMMSection** Sections;
     int numAIDMs;
 
     static Matrix K;

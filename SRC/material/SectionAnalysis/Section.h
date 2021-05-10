@@ -36,7 +36,8 @@ namespace SectionAnalysis
 		std::vector<std::shared_ptr<MomentAxialLoad>> get_force_sp_vec(const int& theta, bool is_pos);
 		int get_moment(const double& axial_load, int theta);
 		int get_moment(const double& My, const double& Mz, const double& axial_load, bool isI);
-
+		int get_axial_load(int theta, const double& min_strain, const double& max_strain, 
+			const double& min_z, const double& max_z);
 
 	private:
 		void pm_analysis(int theta);
@@ -51,6 +52,12 @@ namespace SectionAnalysis
 		void rapid_add_prt(std::shared_ptr<MomentAxialLoadSet>& force_set_sp, bool is_pos,
 			std::shared_ptr<MomentAxialLoad>& force_i_sp, std::shared_ptr<MomentAxialLoad>& force_j_sp,
 			const double& min_z, const double& max_z);
+
+	public:
+		double A(void) const;
+		double Iy(void) const;
+		double Iz(void) const;
+		double E(void)const;
 
 	private:
 		//≥ı ºœÀŒ¨Ωÿ√Ê

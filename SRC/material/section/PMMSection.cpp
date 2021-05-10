@@ -4,8 +4,7 @@
 using namespace AutoMesh;
 
 #include <elementAPI.h>
-
-
+#include "AIDMMaterial.h"
 
 void* OPS_PMMSectionRectBeam()
 {
@@ -15,9 +14,11 @@ void* OPS_PMMSectionRectBeam()
 	}
 
 	// get tag
-	int tag;
+	int tag, AIDMtag_3, AIDMtag_2;
 	int numData = 1;
 	if (OPS_GetIntInput(&numData, &tag) < 0) return 0;
+	if (OPS_GetIntInput(&numData, &AIDMtag_3) < 0) return 0;
+	if (OPS_GetIntInput(&numData, &AIDMtag_2) < 0) return 0;
 
 	//参数容器
 	std::vector<double> dimension_vec;
@@ -42,21 +43,23 @@ void* OPS_PMMSectionRectBeam()
 	if (OPS_GetDoubleInput(&numData, &fy) < 0) return 0;
 
 
-	return new PMMSection(tag, 1, dimension_vec, As_vec, true, fcu, fy, 345);
+	return new PMMSection(tag, AIDMtag_3, AIDMtag_2, 1, dimension_vec, As_vec, true, fcu, fy, 345);
 }
 
 PMMSection::PMMSection()
-	:SectionForceDeformation(0, SEC_TAG_PMMSection)
+	:SectionForceDeformation(0, SEC_TAG_PMMSection), 
+	section_sp_(), AIDM_3_ptr(), AIDM_2_ptr(),
+	AIDM_3_Tag_(-9), AIDM_2_Tag_(-9)
 {
 
 }
 
-PMMSection::PMMSection(const int& tag,
+PMMSection::PMMSection(const int& tag, const int& AIDMTag_3, const int& AIDMTag_2,
 	const int& section_type,
 	const std::vector<double> dimension_vec,
 	const std::vector<int> As_vec, bool is_beam,
 	const int& fcu, const double& bar_fy, const double& steel_fy)
-	: SectionForceDeformation(tag, SEC_TAG_PMMSection)
+	: SectionForceDeformation(tag, SEC_TAG_PMMSection), AIDM_3_Tag_(AIDMTag_3), AIDM_2_Tag_(AIDMTag_2)
 {
 	//构造截面
 	std::shared_ptr<AutoMesh::FRAMSection> section(new AutoMesh::FRAMSection(section_type, 
@@ -97,6 +100,24 @@ PMMSection::PMMSection(const int& tag,
 			as_pos_vec[i]->get_y(), as_A_vec[i], bar_fy);
 	//截面分析
 	this->section_sp_->analysis(4);
+	//获得AIDM指针
+	if (this->AIDM_3_Tag_ < 0) this->AIDM_3_ptr = new AIDMMaterial();
+	else this->AIDM_3_ptr = dynamic_cast<AIDMMaterial*>(OPS_getUniaxialMaterial(this->AIDM_3_Tag_)->getCopy());
+	if (this->AIDM_2_Tag_ < 0) this->AIDM_2_ptr = new AIDMMaterial();
+	else this->AIDM_2_ptr = dynamic_cast<AIDMMaterial*>(OPS_getUniaxialMaterial(this->AIDM_2_Tag_)->getCopy());
+	//判断是否读取成功
+	if (this->AIDM_3_ptr == 0)
+	{
+		opserr << "WARNING no AIDMmaterial " << this->AIDM_3_Tag_ <<
+			"exitsts - section PMMSection\n";
+		exit(-1);
+	}
+	if (this->AIDM_2_ptr == 0)
+	{
+		opserr << "WARNING no AIDMmaterial " << this->AIDM_2_Tag_ <<
+			"exitsts - section PMMSection\n";
+		exit(-1);
+	}
 }
 
 PMMSection::PMMSection(const int& tag, std::shared_ptr<SectionAnalysis::Section> section_sp)
@@ -115,6 +136,14 @@ int PMMSection::get_moment(const double& My, const double& Mz, const double& axi
 	auto axial_load_kn = axial_load / 1E3;
 	auto moment = this->section_sp_->get_moment(My, Mz, axial_load_kn, isI);
 	return moment * 1E6;
+}
+
+SectionForceDeformation* PMMSection::getCopy(void)
+{
+	auto section = new PMMSection(this->getTag(), this->section_sp_);
+	section->AIDM_2_ptr = dynamic_cast<AIDMMaterial*>(this->AIDM_2_ptr->getCopy());
+	section->AIDM_3_ptr = dynamic_cast<AIDMMaterial*>(this->AIDM_3_ptr->getCopy());
+	return section;
 }
 
 #pragma region unavailable
@@ -148,21 +177,17 @@ int PMMSection::revertToLastCommit(void)
 {
 	return 0;
 }
+
 int PMMSection::revertToStart(void)
 {
 	return 0;
-}
-
-SectionForceDeformation* PMMSection::getCopy(void)
-{
-	auto section = new PMMSection(this->getTag(), this->section_sp_);
-	return section;
 }
 
 const ID& PMMSection::getType(void)
 {
 	return NULL;
 }
+
 int PMMSection::getOrder(void) const
 {
 	return 0;
@@ -185,7 +210,7 @@ void PMMSection::Print(OPS_Stream& s, int flag)
 
 
 Vector PMMSection::s(0);
-Matrix PMMSection::ks(0, 0);
+Matrix PMMSection::ks(1, 1);
 
 #pragma endregion
 

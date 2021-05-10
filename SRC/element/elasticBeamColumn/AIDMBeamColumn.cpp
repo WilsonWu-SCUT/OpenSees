@@ -366,65 +366,6 @@ void* OPS_AIDMBeamColumn(void)
 
 AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
 	double Jx, double Iy, double Iz,
-	int Nd1, int Nd2, CrdTransf& theTransf, int numAidms, UniaxialMaterial** aidms)
-	:Element(tag, ELE_TAG_AIDMBeamColumn),
-	A(A), E(E), G(G), Jx(Jx), Iy(Iy), Iz(Iz),
-	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0),
-	numAIDMs(numAidms), iAIDMTag(0), jAIDMTag(0), isGravityConst(false), CLoadFactor(0.0), TLoadFactor(0.0), isInitial(false)
-{
-	// allocate memory for numMaterials1d uniaxial material models
-	AIDMs = new AIDMMaterial * [numAidms];
-
-	this->initialAIDMBeamColumn(Nd1, Nd2, theTransf, 0 , 0);
-
-	// get a copy of the material objects and check we obtained a valid copy
-	for (int i = 0; i < numAIDMs; i++) {
-		AIDMs[i] = dynamic_cast<AIDMMaterial*>(aidms[i]->getCopy());
-		//AIDMs[i] = (aidms[i]->getCopy());
-		if (AIDMs[i] == 0) {
-			opserr << "AIDMBeamColumn::AIDMBeamColumn - failed to get a copy of material " << aidms[i]->getTag() << endln;
-			exit(-1);
-		}
-	}
-}
-
-AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
-	double Jx, double Iy, double Iz,
-	int Nd1, int Nd2, CrdTransf& theTransf, const std::vector<int> tag_vec)
-	:Element(tag, ELE_TAG_AIDMBeamColumn),
-	A(A), E(E), G(G), Jx(Jx), Iy(Iy), Iz(Iz),
-	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0),
-	numAIDMs(tag_vec.size()), isGravityConst(false), CLoadFactor(0.0), TLoadFactor(0.0), isInitial(false)
-{
-	// allocate memory for numMaterials1d uniaxial material models
-	AIDMs = new AIDMMaterial * [numAIDMs];
-	iAIDMTag = tag_vec[0]; jAIDMTag = tag_vec[1];
-//	iAIDMTag = -2; jAIDMTag = -2;
-
-	this->initialAIDMBeamColumn(Nd1, Nd2, theTransf, 0, 0);
-
-	// get a copy of the material objects and check we obtained a valid copy
-	for (int i = 0; i < numAIDMs; i++) {
-		if (tag_vec[i] < 0)
-		{
-			AIDMs[i] = new AIDMMaterial();
-		}
-		else
-		{
-			AIDMs[i] = dynamic_cast<AIDMMaterial*>(OPS_getUniaxialMaterial(tag_vec[i])->getCopy());
-			if (AIDMs[i] == 0)
-			{
-				opserr << "WARNING no material " << tag_vec[i] <<
-					"exitsts - element AIDMBeamColumn\n";
-				exit(-1);
-			}
-		}
-	}
-	
-}
-
-AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
-	double Jx, double Iy, double Iz,
 	int Nd1, int Nd2, CrdTransf& theTransf, const std::vector<int> tag_vec, const double& rigidILength, const double& rigidJLength)
 	:Element(tag, ELE_TAG_AIDMBeamColumn),
 	A(A), E(E), G(G), Jx(Jx), Iy(Iy), Iz(Iz),
@@ -459,8 +400,9 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
 
 AIDMBeamColumn::AIDMBeamColumn()
 	:Element(0, ELE_TAG_AIDMBeamColumn),
-	A(0.0), E(0.0), G(0.0), Jx(0.0), Iy(0.0), Iz(0.0),
-	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0), initialLength(0)
+	A(A), E(E), G(G), Jx(Jx), Iy(Iy), Iz(Iz),
+	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0),
+	numAIDMs(0), iAIDMTag(0), jAIDMTag(0), isGravityConst(false), CLoadFactor(0.0), TLoadFactor(0.0), isInitial(false)
 {
 	// does nothing
 	q0[0] = 0.0;
