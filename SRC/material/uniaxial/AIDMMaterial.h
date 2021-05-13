@@ -113,40 +113,66 @@ public:
     int setParameter(const char **argv, int argc, Parameter &param);
     int updateParameter(int parameterID, Information &info);
 
-    public:
+  public:
+    //设定剪跨比
     void setLammda(const double& shearSpan);
+    //判断承载力是否越界
     bool checkCapacity(const double& Moment, const int& eleTag);
+    //设定初始刚度
     void setInitialK(double K, bool isToElastic);
 
   protected:
 
   private:
+      //从骨架上计算应力
       double getStressOnBackbone(const double& drift);
+      //从骨架上计算切线刚度
       void setTangentOnBackbone(const double& strain, bool loading_direct_pos);
+      //计算卸载刚度
       int setUnloadingTangent(const double& strain);
+      //计算重加载刚度
       void setReloadingTangent(const double& strain, bool loading_direct_pos);
 
   private:
+      //获得处理为ANN输出参数的基本变量
       std::vector<double>& getRegularizedValueVector(const AIDMParamEnum& type);
+      //参数转为ANN输入参数
       float getRegularizedValue(const double& value, const AIDMParamEnum& type);
+      //ANN输出参数转为普通参数
       float getNormalValue(const double& value, const AIDMParamEnum& type);
+      //输入层的构件特征参数
       std::vector<float> getComponentParamsVec(bool is_pos);
+      //更新骨架参数
       void updateSkeletonParams();
+      //更新滞回参数
       void updateHystereticParams(bool is_pos);
+      //是否为有效的AIDM对象
       bool isAvailabelAIDM() const;
 
   private:
+      //骨架曲线指向点应变系数
       double backbone_ortStrainFactor = 1.2;
+      //计算初始刚度采用的峰值应变系数
       double backbone_inidStrainFactor = 0.1;
+      //初始剪跨比
       double initialLammda = 4;
+      //杀死单元的应力系数
       double killStressFactor = 0.2;
       int mnFactor = 1;
 
   private:
+      //剪跨比
       double lammda;
+      //纵筋配筋特征值
       double lammdaS;
+      //面积配箍特征值
       double lammdaSV;
+
+      //受拉纵筋与受压纵筋比
+      //通过PMMSection计算
       double lammdaT_pos;
+
+      //初始刚度
       double initialK;
 
   private:
@@ -184,6 +210,7 @@ public:
       bool needUpdateHANN_neg;
       bool needUpdateBANN;
       //Section Height
+      //通过PMM截面获取
       double sectionHeight;
 
   private:
@@ -196,8 +223,9 @@ public:
     bool CLoadingDirectPos;
     bool TLoadingDirectPos;
     bool ensureIniK;
-
+    //单元是否杀死
     bool isKill;
+    //单元是否弹性
     bool isToElastic;
 };
 

@@ -1,4 +1,5 @@
 #include "PMMSection.h"
+#include "SectionAnalysisExport.h"
 #include "AutoMesh.h"
 
 using namespace AutoMesh;
@@ -48,7 +49,8 @@ void* OPS_PMMSectionRectBeam()
 
 PMMSection::PMMSection()
 	:SectionForceDeformation(0, SEC_TAG_PMMSection), 
-	section_sp_(), AIDM_3_ptr(), AIDM_2_ptr(),
+	section_sp_(), FRAMSection_sp_(),
+	AIDM_3_ptr(), AIDM_2_ptr(),
 	AIDM_3_Tag_(-9), AIDM_2_Tag_(-9)
 {
 
@@ -62,10 +64,10 @@ PMMSection::PMMSection(const int& tag, const int& AIDMTag_3, const int& AIDMTag_
 	: SectionForceDeformation(tag, SEC_TAG_PMMSection), AIDM_3_Tag_(AIDMTag_3), AIDM_2_Tag_(AIDMTag_2)
 {
 	//构造截面
-	std::shared_ptr<AutoMesh::FRAMSection> section(new AutoMesh::FRAMSection(section_type, 
+	this->FRAMSection_sp_.reset(new AutoMesh::FRAMSection(section_type,
 		AutoMesh::SectionType::RC));
 	//设定截面基本参数（保护层默认20）
-	auto isSucess = section->set_dimension(dimension_vec, 20);
+	auto isSucess = this->FRAMSection_sp_->set_dimension(dimension_vec, 20);
 	//失败直接返回
 	if (!isSucess)
 	{
@@ -73,7 +75,7 @@ PMMSection::PMMSection(const int& tag, const int& AIDMTag_3, const int& AIDMTag_
 		return;
 	}
 	//设定配筋
-	isSucess = section->set_As(As_vec, is_beam);
+	isSucess = this->FRAMSection_sp_->set_As(As_vec, is_beam);
 	//失败直接返回
 	if (!isSucess)
 	{
@@ -81,7 +83,7 @@ PMMSection::PMMSection(const int& tag, const int& AIDMTag_3, const int& AIDMTag_
 		return;
 	}
 	//剖分截面
-	auto mesh_ptr = section->get_mesh_sp(50, AutoMesh::MeshMethod::LoopingTri, true);
+	auto mesh_ptr = this->FRAMSection_sp_->get_mesh_sp(50, AutoMesh::MeshMethod::LoopingTri, true);
 	isSucess = mesh_ptr->mesh();	
 	//失败直接返回
 	if (!isSucess)
@@ -92,8 +94,8 @@ PMMSection::PMMSection(const int& tag, const int& AIDMTag_3, const int& AIDMTag_
 	//设定截面参数
 	this->section_sp_.reset(new SectionAnalysis::Section(mesh_ptr, fcu, steel_fy));
 	//获得配筋及配筋面积
-	auto as_pos_vec = section->get_as_pos_vec();
-	auto as_A_vec = section->get_as_A_vec();
+	auto as_pos_vec = this->FRAMSection_sp_->get_as_pos_vec();
+	auto as_A_vec = this->FRAMSection_sp_->get_as_A_vec();
 	//遍历向量
 	for (int i = 0; i < std::min(as_pos_vec.size(), as_A_vec.size()); i++)
 		this->section_sp_->add_reinforced_bar(as_pos_vec[i]->get_x(), 
@@ -110,13 +112,13 @@ PMMSection::PMMSection(const int& tag, const int& AIDMTag_3, const int& AIDMTag_
 	{
 		opserr << "WARNING no AIDMmaterial " << this->AIDM_3_Tag_ <<
 			"exitsts - section PMMSection\n";
-		exit(-1);
+		this->AIDM_3_Tag_ = -2;
 	}
 	if (this->AIDM_2_ptr == 0)
 	{
 		opserr << "WARNING no AIDMmaterial " << this->AIDM_2_Tag_ <<
 			"exitsts - section PMMSection\n";
-		exit(-1);
+		this->AIDM_2_Tag_ = -2;
 	}
 }
 
@@ -136,6 +138,23 @@ int PMMSection::get_moment(const double& My, const double& Mz, const double& axi
 	auto axial_load_kn = axial_load / 1E3;
 	auto moment = this->section_sp_->get_moment(My, Mz, axial_load_kn, isI);
 	return moment * 1E6;
+}
+
+void PMMSection::setLammda(const Vector& force_vec, bool is_I)
+{
+	this->AIDM_3_ptr->setLammda(is_I?
+		force_vec(4) / force_vec(2): force_vec(10) / force_vec(8));
+	this->AIDM_2_ptr->setLammda(is_I ?
+		force_vec(5) / force_vec(1) : force_vec(11) / force_vec(7));
+}
+
+int PMMSection::setTrialDeformation(const Vector& deformation_vec, bool is_I)
+{
+	int retVal = this->AIDM_3_ptr->setTrialStrain(
+		is_I ? deformation_vec(3): -deformation_vec(4));
+	retVal += this->AIDM_2_ptr->setTrialStrain(
+		is_I ? deformation_vec(1) : -deformation_vec(2));
+	return retVal;
 }
 
 SectionForceDeformation* PMMSection::getCopy(void)
@@ -170,16 +189,27 @@ const Matrix& PMMSection::getInitialTangent(void)
 
 int PMMSection::commitState(void)
 {
-	return 0;
+	//AIDM CommitState
+	int retVal = this->AIDM_2_ptr->commitState();
+	retVal += this->AIDM_3_ptr->commitState();
+	//is kill
+	if (this->AIDM_2_ptr->iskill()) this->AIDM_2_Tag_ = -1;
+	if (this->AIDM_3_ptr->iskill()) this->AIDM_3_Tag_ = -1;
+	//是否成功
+	return retVal;
 }
 
 int PMMSection::revertToLastCommit(void)
 {
-	return 0;
+	int retVal = this->AIDM_2_ptr->revertToLastCommit();
+	retVal += this->AIDM_3_ptr->revertToLastCommit();
+	return retVal;
 }
 
 int PMMSection::revertToStart(void)
 {
+	this->AIDM_2_ptr->revertToStart();
+	this->AIDM_3_ptr->revertToStart();
 	return 0;
 }
 
@@ -195,22 +225,25 @@ int PMMSection::getOrder(void) const
 
 int PMMSection::sendSelf(int commitTag, Channel& theChannel)
 {
+	opserr << "PMMSection::sendSelf() - failed to send data\n";
 	return -1;
 }
 
 int PMMSection::recvSelf(int commitTag, Channel& theChannel, FEM_ObjectBroker& theBroker)
 {
+	opserr << "PMMSection::recvSelf() - failed to receive data\n";
 	return -1;
 }
 
 void PMMSection::Print(OPS_Stream& s, int flag)
 {
-
+	opserr << "PMMSection::Print() - failed to print\n";
 }
 
 
 Vector PMMSection::s(0);
-Matrix PMMSection::ks(1, 1);
+
+Matrix PMMSection::ks(2, 2);
 
 #pragma endregion
 

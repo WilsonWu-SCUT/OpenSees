@@ -7,9 +7,20 @@
 #include <map>
 
 #include <SectionForceDeformation.h>
-#include "SectionAnalysisExport.h"
+
 
 class AIDMMaterial;
+
+namespace AutoMesh
+{
+	class FRAMSection;
+}
+
+namespace SectionAnalysis
+{
+	class Section;
+}
+
 
 class PMMSection: public SectionForceDeformation
 {
@@ -45,6 +56,14 @@ public:
 	}
 
 public:
+	//设定剪跨比
+	void setLammda(const Vector& force_vec, bool is_I);
+	//判断承载力是否越界
+	bool checkCapacity(const double& Moment, const int& eleTag);
+	//设定变形
+	int setTrialDeformation(const Vector& deformation_vec, bool is_I);
+
+public:
 	const Vector& getSectionDeformation(void);
 	const Vector& getStressResultant(void);
 	const Matrix& getSectionTangent(void);
@@ -66,6 +85,9 @@ public:
 private:
 	//Section Analysis
 	std::shared_ptr<SectionAnalysis::Section> section_sp_;
+	//截面信息
+	std::shared_ptr<AutoMesh::FRAMSection> FRAMSection_sp_;
+
 	//AIDM材料指针 绕3轴
 	AIDMMaterial* AIDM_3_ptr;
 	//AIDM材料指针 绕2轴
@@ -73,6 +95,10 @@ private:
 	//材料编号
 	int AIDM_3_Tag_;
 	int AIDM_2_Tag_;
+	//设定剪跨比
+	
+
+
 
 private:
 	static Vector s;

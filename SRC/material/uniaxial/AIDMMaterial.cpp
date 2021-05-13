@@ -171,23 +171,23 @@ AIDMMaterial::~AIDMMaterial()
 int 
 AIDMMaterial::setTrialStrain(double strain, double strainRate)
 {
-    //is elastic
+    //is elastic 单元为弹性
     if (this->isToElastic)
     {
         TStrain = strain;
         TStress = TStrain * K;
         return 0;
     }
-    //Ensure is null or not
+    //Ensure is null or not 单元不合法或已被杀死 刚度为0
     if (!this->isAvailabelAIDM() || this->isKill)
     {
         TStrain = strain;
         return 0;
     }
-    if (abs(CStrain - strain) > 1E-16)
-        TLoadingDirectPos = CStrain < strain;
-    else if (strain != 0 && CStrain != 0)
-        return 0;
+    //判断加载方向 产生非常小的变形才判断加载方向
+    if (abs(CStrain - strain) > 1E-16)  TLoadingDirectPos = CStrain < strain;
+    //未发生任何加载 且应变都不为0（非初始状态）
+    else if (strain != 0 && CStrain != 0)  return 0;
     //history maximum strain
     auto max_strain = TLoadingDirectPos ? CstrainMax : CstrainMin;
     //strain larger than history maximum value -> go on backbone
@@ -601,6 +601,7 @@ AIDMMaterial::revertToLastCommit(void)
 int 
 AIDMMaterial::revertToStart(void)
 {
+    /*iskill等属性未补充*/
     TStrain = 0.0;
     TStress = 0.0;
     K = 0.0;
@@ -724,11 +725,12 @@ double AIDMMaterial::getStressOnBackbone(const double& drift)
 
 void AIDMMaterial::setInitialK(double iniK, bool isToElastic)
 {
-    //Initial Boundary
+    //Initial Boundary 获得初始刚度值
     this->initialK = iniK;
-    mnFactor = 1;
-    //Elastic
+    this->mnFactor = 1;
+    //Elastic 单元转化为弹性
     this->isToElastic = isToElastic;
+    //转化为弹性直接获得刚度
     if (this->isToElastic)
     {
         K = this->initialK;
