@@ -165,6 +165,40 @@ SectionForceDeformation* PMMSection::getCopy(void)
 	return section;
 }
 
+#pragma region Section basic information
+
+double PMMSection::A(void) const
+{
+	return this->section_sp_->A();
+}
+
+double PMMSection::Iy(void) const
+{
+	return this->section_sp_->Iy();
+}
+
+double PMMSection::Iz(void) const
+{
+	return this->section_sp_->Iz();
+}
+
+double PMMSection::E(void) const
+{
+	return this->section_sp_->E();
+}
+
+double PMMSection::Jx(void) const
+{
+	return this->Iy() + this->Iz();
+}
+
+double PMMSection::G(void) const
+{
+	return  0.4 * this->E();
+}
+
+#pragma endregion
+
 #pragma region unavailable
 
 const Vector& PMMSection::getSectionDeformation(void)

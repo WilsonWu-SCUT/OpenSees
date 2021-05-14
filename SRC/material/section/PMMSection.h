@@ -36,24 +36,12 @@ public:
 
 public:
 	int get_moment(const double& My, const double& Mz, const double& axial_load, bool isI);
-	double A(void) const {
-		return this->section_sp_->A();
-	}
-	double Iy(void) const {
-		return this->section_sp_->Iy();
-	}
-	double Iz(void) const {
-		return this->section_sp_->Iz();
-	}
-	double E(void) const {
-		return this->section_sp_->E();
-	}
-	double Jx(void) const {
-		return this->Iy() + this->Iz();
-	}
-	double G(void) const {
-		return 0.4 * this->E();
-	}
+	double A(void) const;
+	double Iy(void) const;
+	double Iz(void) const;
+	double E(void) const;
+	double Jx(void) const;
+	double G(void) const;
 
 public:
 	//Éè¶¨¼ô¿ç±È

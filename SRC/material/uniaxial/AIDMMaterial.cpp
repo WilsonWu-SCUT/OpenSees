@@ -188,21 +188,22 @@ AIDMMaterial::setTrialStrain(double strain, double strainRate)
     if (abs(CStrain - strain) > 1E-16)  TLoadingDirectPos = CStrain < strain;
     //未发生任何加载 且应变都不为0（非初始状态）
     else if (strain != 0 && CStrain != 0)  return 0;
-    //history maximum strain
+    //history maximum strain 获得历史最大变形
     auto max_strain = TLoadingDirectPos ? CstrainMax : CstrainMin;
-    //strain larger than history maximum value -> go on backbone
+    //strain larger than history maximum value -> go on backbone  
+    //超过历史最大变形 指向骨架曲线
     if ((TLoadingDirectPos ? strain >= max_strain : strain <= max_strain))
     {
         this->setTangentOnBackbone(strain, TLoadingDirectPos);
         return 0;
     }
-    //Unloading
+    //Unloading 如果应变呈现卸载趋势（同向，绝对值小） 获得卸载刚度
     else if (abs(strain) < abs(CStrain) && CStress * CStrain > 0)
     {
         auto info  = this->setUnloadingTangent(strain);
         if(info == 0) return 0;
     }
-    //Reload path not created
+    //Reload path not created 如果没有历史最大变形 则指向骨架
     if (max_strain == 0)
     {
         this->setTangentOnBackbone(strain, TLoadingDirectPos);
@@ -226,31 +227,36 @@ AIDMMaterial::setTrial(double strain, double &stress, double &tangent, double st
 
 void AIDMMaterial::setTangentOnBackbone(const double& strain, bool loading_direct_pos)
 {
-    //Update params
+    //Update params 更新骨架参数
     this->updateSkeletonParams();
-    //Oriented Strain Stress
+    //Oriented Strain Stress 指向的应变（初值）
     auto oriented_strain = backbone_inidStrainFactor * (loading_direct_pos ? strainC_pos : -strainC_neg);
-    //In same side
+    //In same side 当应变较大时，根据上次提交的应变确定指向应变
     if ((loading_direct_pos ? strain >= 0 : strain <= 0))
     {
         oriented_strain = abs(oriented_strain) > abs(CStrain * backbone_ortStrainFactor) ?
             oriented_strain : CStrain * backbone_ortStrainFactor;
     }
-    // strain out of oriented
+    // strain out of oriented 如果指向应变小于目标应变  则指向应变改为目标应变
     if((loading_direct_pos? oriented_strain < strain: oriented_strain > strain))
         oriented_strain = strain;
+    //通过应变获得骨架上的应力
     auto oriented_stress = this->getStressOnBackbone(oriented_strain);
-    //Updating stiffness
+    //Updating stiffness 如果没有应变增量 则取上一步采用的刚度值
     if (oriented_strain - CStrain == 0) return;
+    //Updating stiffness  更新刚度
     K = (oriented_stress - CStress) / (oriented_strain - CStrain);
-    // Updating TStrain TStress
+    // Updating TStrain TStress 更新该迭代步下的应力应变
     TStrain = strain;
     TStress = CStress + K * (strain - CStrain);
-    //is kill the element
+    //is kill the element 变形超过峰值变形（有上升下降）
     bool isPost = abs(strain) > (loading_direct_pos ? strainC_pos : strainC_neg);
+    //峰值承载力
     auto backboneMaxStress = loading_direct_pos ? stressFactor_pos * stressSA_pos :
         stressFactor_neg * stressSA_neg;
+    //残余应力系数是否越界
     bool isStressBelow = abs(TStress) / abs(backboneMaxStress) < this->killStressFactor;
+    //软化段、残余应力越界、负刚度 则认为构件可以被杀死
     if (K < 0 && isPost && isStressBelow)
     {
         K = 0;
@@ -260,24 +266,24 @@ void AIDMMaterial::setTangentOnBackbone(const double& strain, bool loading_direc
 
 int AIDMMaterial::setUnloadingTangent(const double& strain)
 {
-    //Update params
+    //Update params 更新滞回参数
     this->updateHystereticParams(strain > 0);
-    //Maximum unloading stiffness
+    //Maximum unloading stiffness 最大卸载刚度 指向零点
     auto min_unloading_K = CStress / CStrain;
-    //Oriented Strain Stress
+    //Oriented Strain Stress 最大卸载刚度也不应大于初始刚度（针对y轴附近的震荡）
     auto oriented_strain = backbone_inidStrainFactor * (strain > 0 ? strainC_pos : -strainC_neg);
     auto max_unloading_K = this->getStressOnBackbone(oriented_strain) / oriented_strain;
-    //Caping secant stiffness
+    //Caping secant stiffness 峰值点的割线刚度系数
     auto secant_Kc = CStress > 0 ? stressFactor_pos * stressSA_pos / strainC_pos :
         stressFactor_neg * stressSA_neg / strainC_neg;
-    //Unloading stiffness
+    //Unloading stiffness 计算卸载刚度
     auto unloading_K = CStress > 0 ? secant_Kc * afa_pos : secant_Kc * afa_neg;
-    //Unloading stiffness is to rigid
+    //Unloading stiffness is to rigid 卸载刚度不可越界
     K = unloading_K < min_unloading_K ? min_unloading_K : unloading_K;
     K = K > max_unloading_K ? max_unloading_K : K;
-    //Updating TStrain TStress
+    //Updating TStrain TStress 更新应力应变
     auto stress = CStress + K * (strain - CStrain);
-    //is balance
+    //is balance 如果超过卸载边界 获得重加载刚度
     if (stress * strain <= 0)
         return -1;
     TStrain = strain;
@@ -287,41 +293,49 @@ int AIDMMaterial::setUnloadingTangent(const double& strain)
 
 void AIDMMaterial::setReloadingTangent(const double& strain, bool loading_direct_pos)
 {
-    //Update params
+    //Update params 更新滞回参数
     this->updateHystereticParams(loading_direct_pos);
-    //Maximum deformation
+    //Maximum deformation 最大变形
     auto max_strain = loading_direct_pos ? CstrainMax : CstrainMin;
+    //最大变形对应的应力
     auto max_stress = loading_direct_pos ? CstressMaxFactor * stressFactor_pos * stressSA_pos :
         CstressMinFactor * stressFactor_neg * stressSA_neg;
-    //prk point capacity
+    //prk point capacity 拐点应力
     auto brk_prt_stress = max_stress * (loading_direct_pos ? gamma_pos : gamma_neg);
-    //oriented point capacity
+    //oriented point capacity 指向点应力
     auto oreinted_prt_stress = max_stress * (loading_direct_pos ? eta_pos : eta_neg);
-    //Caping secant stiffness
+    //Caping secant stiffness 割线刚度
     auto secant_Kc = loading_direct_pos ? stressFactor_pos * stressSA_pos / strainC_pos :
         stressFactor_neg * stressSA_neg / strainC_neg;
-    //break proint maxstress with sign
+    //break proint maxstress with sign 二段重加载刚度不可大于初始刚度
     auto brk_prt_strain_max = max_strain - (oreinted_prt_stress - brk_prt_stress) / this->getInitialTangent();
-    //towards to oriented prt:
+    //towards to oriented prt: 是否已经过拐点应力
     bool isLargerthanBrkprtStress = loading_direct_pos ? CStress > brk_prt_stress: CStress < brk_prt_stress;
+    //是否已经经过 拐点最大应变
     bool isbeyondBrkprtStrainMax = loading_direct_pos ? CStrain > brk_prt_strain_max : CStrain < brk_prt_strain_max;
+    //拐点应力是否超过指向点应力
     bool isBrkprtBeyondOrientedPrt = abs(brk_prt_stress) > abs(oreinted_prt_stress);
-    //Oriented stiffness
+    //Oriented stiffness 计算二段重加载刚度
     auto reloadingB_K = (oreinted_prt_stress - CStress) / (max_strain - CStrain);
+    //如果经过 拐点最大应变 或 拐点应力 或 拐点应力超过指向点应力
+    //二段重加载
     if (isLargerthanBrkprtStress || isbeyondBrkprtStrainMax || isBrkprtBeyondOrientedPrt)
     {
-        if (max_strain - CStrain == 0) 
-            return;
+        //应变无发生任何变化 ？ 
+        if (max_strain - CStrain == 0) return;
         K = reloadingB_K;
     }
-    //maybe towards to break prt
+    //maybe towards to break prt 指向拐点
     else
     {
-        //First reloading stiffness
+        //First reloading stiffness 计算第一段重加载刚度
         auto reloadingA_K = loading_direct_pos ? secant_Kc * beta_pos : secant_Kc * beta_neg;
-        //Reloading target strain
+        //Reloading target strain 拐点真实应变
         auto reloadingA_strain = CStrain + (brk_prt_stress - CStress) / reloadingA_K;
-        bool isStrainBeyond = loading_direct_pos ? reloadingA_strain > brk_prt_strain_max: reloadingA_strain < brk_prt_strain_max;
+        //是否已经超过了 拐点真实应变
+        bool isStrainBeyond = loading_direct_pos ? reloadingA_strain > brk_prt_strain_max: 
+            reloadingA_strain < brk_prt_strain_max;
+        //超过采用二段应变
         K = isStrainBeyond ? reloadingB_K : reloadingA_K;
     }
     // Updating TStrain TStress
@@ -329,6 +343,8 @@ void AIDMMaterial::setReloadingTangent(const double& strain, bool loading_direct
     TStress = CStress + K * (strain - CStrain);
     return;
 }
+
+#pragma region 获得输入层和输出层参数
 
 std::vector<double>& AIDMMaterial::getRegularizedValueVector(const AIDMParamEnum& type)
 {
@@ -366,12 +382,12 @@ float AIDMMaterial::getNormalValue(const double& value, const AIDMParamEnum& typ
     if (type == AIDMParamEnum::Afa || type == AIDMParamEnum::Beta ||
         type == AIDMParamEnum::Gamma || type == AIDMParamEnum::Eta)
     {
-        if (value < 0) 
+        if (value < 0)
             return 0.001;
     }
     auto& vec = getRegularizedValueVector(type);
     auto powValue = pow(value, 1 / vec[2]);
-    auto normalValue =  powValue * (vec[1] - vec[0]) + vec[0];
+    auto normalValue = powValue * (vec[1] - vec[0]) + vec[0];
 
 
 
@@ -391,15 +407,15 @@ float AIDMMaterial::getNormalValue(const double& value, const AIDMParamEnum& typ
 
     else if (type == AIDMParamEnum::Afa || type == AIDMParamEnum::Beta)
     {
-        if (value < 0) 
+        if (value < 0)
             return 0.001;
     }
 
     else if (type == AIDMParamEnum::Gamma || type == AIDMParamEnum::Eta)
     {
-        if (value < 0) 
+        if (value < 0)
             return 0.001;
-        else if (value > 1) 
+        else if (value > 1)
             return 1;
     }
 
@@ -412,9 +428,11 @@ std::vector<float> AIDMMaterial::getComponentParamsVec(bool is_pos)
     auto lammda_reg = this->getRegularizedValue(this->lammda, AIDMParamEnum::Lammda);
     auto lammdas_reg = this->getRegularizedValue(lammdaS, AIDMParamEnum::LammdaS);
     auto lammdasv_reg = this->getRegularizedValue(lammdaSV, AIDMParamEnum::LammdaSV);
-    auto lammdat_reg = this->getRegularizedValue(is_pos? lammdaT_pos : 1/ lammdaT_pos, AIDMParamEnum::LammdaT);
+    auto lammdat_reg = this->getRegularizedValue(is_pos ? lammdaT_pos : 1 / lammdaT_pos, AIDMParamEnum::LammdaT);
     return { lammda_reg, lammdas_reg,  lammdasv_reg, lammdat_reg };
 }
+
+#pragma endregion
 
 void AIDMMaterial::updateSkeletonParams()
 {
@@ -521,13 +539,15 @@ AIDMMaterial::getInitialTangent(void)
 int 
 AIDMMaterial::commitState(void)
 {
+    //是否软化状态
     bool isSoften = abs(CStress) > abs(TStress);
+    //提交应力应变、刚度、加载方向
     CStrain = TStrain;
     CStress = TStress;
     CK = K;
     Clammda = lammda;
     CLoadingDirectPos = TLoadingDirectPos;
-    //Need to kill
+    //Need to kill 判断是否为无效单元或单元已被杀死
     if (this->isKill || !this->isAvailabelAIDM())
         return 0;
     //Record Maxmum deformation
@@ -537,17 +557,19 @@ AIDMMaterial::commitState(void)
         {
             this->initialK = 0;
         }*/
-        // not the maximum deformation
+        // not the maximum deformation 未达到历史最大变形
         if (abs(CstrainMax) > abs(CStrain) || abs(CStrain) < backbone_inidStrainFactor * strainC_pos)
             return 0;
-        // is the new maximum deformation
+        // is the new maximum deformation 达到历史最大变形
+        //获得新的历史最大变形 获得最大变形点的应力系数 滞回参数需要被更新
         CstrainMax = CStrain;
         CstressMaxFactor = CStress / (stressFactor_pos * stressSA_pos);
         needUpdateHANN_pos = true;
-        // is post
+        //处于软化段
         bool isPost = abs(CstrainMax) > abs(strainC_pos);
+        //承载力低于限值要求
         bool isCapacitybelow = abs(CstressMaxFactor) < this->killStressFactor;
-        // need to kill
+        // 处于软化段 承载力低于限值要求 承载力在退化过程 （为何不通过负刚度做判断）
         if (isSoften && isPost && isCapacitybelow)
         {
             isKill = true;
@@ -561,17 +583,19 @@ AIDMMaterial::commitState(void)
         {
             this->initialK = 0;
         }*/
-        // not the maximum deformation
+        // not the maximum deformation  未达到历史最大变形
         if (abs(CstrainMin) > abs(CStrain) || abs(CStrain) < backbone_inidStrainFactor * strainC_neg)
             return 0;
-        // is the new maximum deformation
+        // is the new maximum deformation 达到历史最大变形
+        //获得新的历史最大变形 获得最大变形点的应力系数 滞回参数需要被更新
         CstrainMin = CStrain;
         CstressMinFactor = CStress / (stressFactor_neg * stressSA_neg);
         needUpdateHANN_neg = true;
-        // is post
+        // is post 处于软化段
         bool isPost = abs(CstrainMin) > abs(strainC_neg);
+        //承载力低于限值要求
         bool isCapacitybelow = abs(CstressMinFactor) < this->killStressFactor;
-        // need to kill
+        // 处于软化段 承载力低于限值要求 承载力在退化过程 （为何不通过负刚度做判断）
         if (isSoften && isPost && isCapacitybelow)
         {
             isKill = true;
@@ -586,14 +610,15 @@ AIDMMaterial::commitState(void)
 int 
 AIDMMaterial::revertToLastCommit(void)
 {
-    TStrain = CStrain;
-    TStress = CStress;
-    K = CK;
-    lammda = Clammda;
-    TLoadingDirectPos = CLoadingDirectPos;
-    needUpdateBANN = true;
-    needUpdateHANN_neg = true;
-    needUpdateHANN_pos = true;
+    /*迭代不收敛时调用的方法  返回前一个状态*/
+    this->TStrain = CStrain;
+    this->TStress = CStress;
+    this->K = CK;
+    this->lammda = Clammda;
+    this->TLoadingDirectPos = CLoadingDirectPos;
+    this->needUpdateBANN = true;
+    this->needUpdateHANN_neg = true;
+    this->needUpdateHANN_pos = true;
     return 0;
 }
 
@@ -601,11 +626,18 @@ AIDMMaterial::revertToLastCommit(void)
 int 
 AIDMMaterial::revertToStart(void)
 {
-    /*iskill等属性未补充*/
-    TStrain = 0.0;
-    TStress = 0.0;
-    K = 0.0;
-    lammda = initialLammda;
+    this->TStrain = 0.0;
+    this->TStress = 0.0;
+    this->K = 0.0;
+    this->lammda = this->initialLammda;
+    this->needUpdateBANN = true;
+    this->needUpdateHANN_neg = true;
+    this->needUpdateHANN_pos = true;
+    this->isKill = false;
+    this->isToElastic = false;
+    this->ensureIniK = false;
+    this->TLoadingDirectPos = true;
+    /*待补充*/
     return 0;
 }
 
@@ -625,42 +657,45 @@ AIDMMaterial::getCopy(void)
     return theCopy;
 }
 
+#pragma region NoDefine
 
-int 
-AIDMMaterial::sendSelf(int cTag, Channel &theChannel)
+int
+AIDMMaterial::sendSelf(int cTag, Channel& theChannel)
 {
     opserr << "AIDMMaterial::sendSelf() - failed to send data\n";
     return -1;
 }
 
 
-int 
-AIDMMaterial::recvSelf(int cTag, Channel &theChannel,
-			  FEM_ObjectBroker &theBroker)
+int
+AIDMMaterial::recvSelf(int cTag, Channel& theChannel,
+    FEM_ObjectBroker& theBroker)
 {
     opserr << "AIDMMaterial::recvSelf() - failed to receive data\n";
     return -1;
 }
 
 
-void 
-AIDMMaterial::Print(OPS_Stream &s, int flag)
+void
+AIDMMaterial::Print(OPS_Stream& s, int flag)
 {
-	opserr << "AIDMMaterial::Print() - failed to print\n";
+    opserr << "AIDMMaterial::Print() - failed to print\n";
 }
 
 
 int
-AIDMMaterial::setParameter(const char **argv, int argc, Parameter &param)
-{
-  return -1;
-}
-
-int 
-AIDMMaterial::updateParameter(int parameterID, Information &info)
+AIDMMaterial::setParameter(const char** argv, int argc, Parameter& param)
 {
     return -1;
 }
+
+int
+AIDMMaterial::updateParameter(int parameterID, Information& info)
+{
+    return -1;
+}
+
+#pragma endregion
 
 void AIDMMaterial::setLammda(const double& shearSpan)
 {

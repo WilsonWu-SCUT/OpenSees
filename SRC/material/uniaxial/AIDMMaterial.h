@@ -160,9 +160,16 @@ public:
       double killStressFactor = 0.2;
       int mnFactor = 1;
 
-  private:
-      //剪跨比
+  private: /*力学参数*/
+      //剪跨比（需要revert）
       double lammda;
+      double Clammda;
+      //Caping Capacity based on section Analysis positve value
+      //峰值承载力
+      double stressSA_pos;
+      double stressSA_neg;
+
+  private: /*基本参数*/
       //纵筋配筋特征值
       double lammdaS;
       //面积配箍特征值
@@ -171,25 +178,29 @@ public:
       //受拉纵筋与受压纵筋比
       //通过PMMSection计算
       double lammdaT_pos;
+     //通过PMM截面获取
+      double sectionHeight;
 
-      //初始刚度
-      double initialK;
+    #pragma region AIDM参数
+  private:   /*是否更新本构参数*/
+      bool needUpdateHANN_pos;
+      bool needUpdateHANN_neg;
+      bool needUpdateBANN;
 
-  private:
+  private: /*骨架参数*/
       //shape paramters
-      double m_pos; 
+      double m_pos;
       double m_neg;
       double n_pos;
       double n_neg;
       //caping drift positive value
       double strainC_pos;
       double strainC_neg;
+      //承载力系数
       double stressFactor_pos;
       double stressFactor_neg;
-      //Caping Capacity based on section Analysis positve value
-      double stressSA_pos;
-      double stressSA_neg;
-      //Hysteretic parameters
+
+  private: /*滞回参数*/
       double afa_pos;
       double afa_neg;
       double beta_pos;
@@ -198,31 +209,36 @@ public:
       double gamma_neg;
       double eta_pos;
       double eta_neg;
-      //MaxDeformation
-      double CstrainMax;
-      double CstrainMin;
-      double CstressMaxFactor;
-      double CstressMinFactor;
-      //Stiffness
+
+    #pragma endregion
+
+   private: /*刚度相关*/
+      //初始刚度
+      double initialK;
+      bool ensureIniK;
+      //Stiffness 刚度
       double K;
-      //Need to update hysteretic
-      bool needUpdateHANN_pos;
-      bool needUpdateHANN_neg;
-      bool needUpdateBANN;
-      //Section Height
-      //通过PMM截面获取
-      double sectionHeight;
+      double CK;
 
   private:
+      //MaxDeformation 历史最大变形
+      double CstrainMax;
+      double CstrainMin;
+      //历史最大变形对应的承载力系数
+      double CstressMaxFactor;
+      double CstressMinFactor;
+
+  private:
+    //迭代步及分析步的应力应变
     double TStrain;
     double CStress;
     double CStrain;
     double TStress;
-    double CK;
-    double Clammda;
+    /*加载方向*/
     bool CLoadingDirectPos;
     bool TLoadingDirectPos;
-    bool ensureIniK;
+
+  private:
     //单元是否杀死
     bool isKill;
     //单元是否弹性
