@@ -35,7 +35,8 @@ namespace SectionAnalysis
 	public:
 		std::vector<std::shared_ptr<MomentAxialLoad>> get_force_sp_vec(const int& theta, bool is_pos);
 		int get_moment(const double& axial_load, int theta);
-		int get_moment(const double& My, const double& Mz, const double& axial_load, bool isI);
+		void get_moment(const double& My, const double& Mz, const double& axial_load,
+			double& myca_pos, double& myca_neg, double& mzca_pos, double& mzca_neg);
 		int get_axial_load(int theta, const double& min_strain, const double& max_strain, 
 			const double& min_z, const double& max_z);
 

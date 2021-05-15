@@ -14,6 +14,7 @@ class AIDMMaterial;
 namespace AutoMesh
 {
 	class FRAMSection;
+	enum class SectionType;
 }
 
 namespace SectionAnalysis
@@ -30,12 +31,25 @@ public:
 		const int& section_type, 
 		const std::vector<double> dimension_vec,
 		const std::vector<int> As_vec, bool is_beam,
-		const int& fcu, const double& bar_fy, const double& steel_fy);
-	PMMSection(const int& tag, std::shared_ptr<SectionAnalysis::Section> section_sp);
+		const int& fcu, const double& bar_fy, const double& steel_fy,
+		AutoMesh::SectionType matType);
+	PMMSection(const int& tag, const int& section_type,
+		const std::vector<double> dimension_vec, AutoMesh::SectionType matType);
+	PMMSection(const int& tag);
 	~PMMSection();
 
 public:
-	int get_moment(const double& My, const double& Mz, const double& axial_load, bool isI);
+	/*获得刚度*/
+	inline double EAoverL(const double& L) const
+	{
+		return this->A() * this->E() / L;
+	}
+	inline double GJoverL(const double& L) const
+	{
+		return this->G() * this->Jx() / L;
+	}
+
+private:
 	double A(void) const;
 	double Iy(void) const;
 	double Iz(void) const;
@@ -43,11 +57,20 @@ public:
 	double Jx(void) const;
 	double G(void) const;
 
+private:
+	//纤维截面初始哈市
+	bool iniSection(const int& section_type, const std::vector<double> dimension_vec,
+		AutoMesh::SectionType& matType, const int& fcu, const double& steel_fy);
+
 public:
+	//设定初始刚度
+	void setInitialK(const double& L, const int& factor);
 	//设定剪跨比
 	void setLammda(const Vector& force_vec, bool is_I);
+	//设定承载力
+	void setCapacity(const Vector& force_vec, bool is_I);
 	//判断承载力是否越界
-	bool checkCapacity(const double& Moment, const int& eleTag);
+	bool checkCapacity(const Vector& force_vec, const int& eleTag, bool is_I);
 	//设定变形
 	int setTrialDeformation(const Vector& deformation_vec, bool is_I);
 
@@ -71,22 +94,37 @@ public:
 
 
 private:
+	//防止承载力发生显著退化（相对于无轴力下的弯矩）
+	double min_capacity_factor = 0.2;
+	//是否考虑双偏压
+	bool consider_double_bending = true;
+	//是否硬化初始刚度
+	bool ensureIniK = true;
+
+private:
 	//Section Analysis
 	std::shared_ptr<SectionAnalysis::Section> section_sp_;
 	//截面信息
 	std::shared_ptr<AutoMesh::FRAMSection> FRAMSection_sp_;
 
+	//AIDM材料指针编号
+	int AIDMTag_2_;
+	int AIDMTag_3_;
 	//AIDM材料指针 绕3轴
 	AIDMMaterial* AIDM_3_ptr;
 	//AIDM材料指针 绕2轴
 	AIDMMaterial* AIDM_2_ptr;
-	//材料编号
-	int AIDM_3_Tag_;
-	int AIDM_2_Tag_;
-	//设定剪跨比
-	
-
-
+	//截面高度
+	double sectionHeight_3_;
+	double sectionHeight_2_;
+	//初始截面承载力（无轴力）
+	double capacity_3pos_ini_;
+	double capacity_3neg_ini_;
+	double capacity_2pos_ini_;
+	double capacity_2neg_ini_;
+	//初始刚度
+	double initial_K3_;
+	double initial_K2_;
 
 private:
 	static Vector s;

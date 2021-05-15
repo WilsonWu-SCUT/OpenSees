@@ -113,30 +113,30 @@ std::vector<double> AIDMMaterial::eta_vec = { 0, 1, 6 };
 int AIDMMaterial::predict_num = 0;
 
 AIDMMaterial::AIDMMaterial(int tag, double height, double width, double lammdaS, double lammdaSV, double lammdaT_pos, 
-    double Msa_pos, double Msa_neg, bool ensureIniK)
+    double Msa_pos, double Msa_neg)
 :UniaxialMaterial(tag, MAT_TAG_AIDMMaterial),
 TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
 K(0), CK(0.0),
 stressSA_pos(Msa_pos), stressSA_neg(Msa_neg),
 CstrainMax(0), CstrainMin(0),
 lammda(initialLammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
-needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(height),
-afa_pos(0.0), afa_neg(0.0), isKill(false), isToElastic(false), initialK(0.0), TLoadingDirectPos(true), ensureIniK(ensureIniK)
+needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
+afa_pos(0.0), afa_neg(0.0), isConstant(false),TLoadingDirectPos(true), mnFactor(1)
 {
     this->updateSkeletonParams();
 }
 
 
 AIDMMaterial::AIDMMaterial(int tag, double lammda, double lammdaS, double lammdaSV, double lammdaT_pos, 
-    double Msa_pos, double Msa_neg, bool ensureIniK)
+    double Msa_pos, double Msa_neg)
     :UniaxialMaterial(tag, MAT_TAG_AIDMMaterial),
     TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
     K(0), CK(0.0),
     stressSA_pos(Msa_pos), stressSA_neg(Msa_neg),
     CstrainMax(0), CstrainMin(0),
     lammda(lammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
-    needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(0.0),
-    afa_pos(0.0), afa_neg(0.0), isKill(false), isToElastic(false), initialK(0.0), TLoadingDirectPos(true), ensureIniK(ensureIniK)
+    needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
+    afa_pos(0.0), afa_neg(0.0), isConstant(false), TLoadingDirectPos(true), mnFactor(1)
 {
     this->updateSkeletonParams();
 }
@@ -149,8 +149,8 @@ K(0), CK(0.0),
 stressSA_pos(0.0), stressSA_neg(0.0),
 CstrainMax(0), CstrainMin(0),
 lammda(initialLammda), lammdaS(0.0), lammdaSV(0.0), lammdaT_pos(0.0),
-needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true), sectionHeight(0.0),
-afa_pos(0.0), afa_neg(0.0), isKill(false), isToElastic(false), initialK(0.0), TLoadingDirectPos(true), ensureIniK(false)
+needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
+afa_pos(0.0), afa_neg(0.0), isConstant(false), TLoadingDirectPos(true), mnFactor(1)
 {
 
 }
@@ -172,16 +172,10 @@ int
 AIDMMaterial::setTrialStrain(double strain, double strainRate)
 {
     //is elastic 单元为弹性
-    if (this->isToElastic)
+    if (this->isConstant || !this->isAvailabelAIDM())
     {
         TStrain = strain;
         TStress = TStrain * K;
-        return 0;
-    }
-    //Ensure is null or not 单元不合法或已被杀死 刚度为0
-    if (!this->isAvailabelAIDM() || this->isKill)
-    {
-        TStrain = strain;
         return 0;
     }
     //判断加载方向 产生非常小的变形才判断加载方向
@@ -548,15 +542,10 @@ AIDMMaterial::commitState(void)
     Clammda = lammda;
     CLoadingDirectPos = TLoadingDirectPos;
     //Need to kill 判断是否为无效单元或单元已被杀死
-    if (this->isKill || !this->isAvailabelAIDM())
-        return 0;
+    if (this->isConstant || !this->isAvailabelAIDM()) return 0;
     //Record Maxmum deformation
     if (CStrain > 0)
     {
-        /*if (this->initialK != 0 && abs(CStrain) > abs(strainC_pos * backbone_iniKStrainFactor))
-        {
-            this->initialK = 0;
-        }*/
         // not the maximum deformation 未达到历史最大变形
         if (abs(CstrainMax) > abs(CStrain) || abs(CStrain) < backbone_inidStrainFactor * strainC_pos)
             return 0;
@@ -572,17 +561,12 @@ AIDMMaterial::commitState(void)
         // 处于软化段 承载力低于限值要求 承载力在退化过程 （为何不通过负刚度做判断）
         if (isSoften && isPost && isCapacitybelow)
         {
-            isKill = true;
-            K = 0;
-            TStress = 0;
+            this->isConstant = true;
+            this->K = 0;
         }
     }
     else
     {
-        /*if (this->initialK != 0 && abs(CStrain) > abs(strainC_neg * backbone_iniKStrainFactor))
-        {
-            this->initialK = 0;
-        }*/
         // not the maximum deformation  未达到历史最大变形
         if (abs(CstrainMin) > abs(CStrain) || abs(CStrain) < backbone_inidStrainFactor * strainC_neg)
             return 0;
@@ -598,9 +582,8 @@ AIDMMaterial::commitState(void)
         // 处于软化段 承载力低于限值要求 承载力在退化过程 （为何不通过负刚度做判断）
         if (isSoften && isPost && isCapacitybelow)
         {
-            isKill = true;
-            K = 0;
-            TStress = 0;
+            this->isConstant = true;
+            this->K = 0;
         }
     }
     return 0;
@@ -631,11 +614,10 @@ AIDMMaterial::revertToStart(void)
     this->K = 0.0;
     this->lammda = this->initialLammda;
     this->needUpdateBANN = true;
-    this->needUpdateHANN_neg = true;
-    this->needUpdateHANN_pos = true;
-    this->isKill = false;
-    this->isToElastic = false;
-    this->ensureIniK = false;
+    this->needUpdateHANN_neg = false;
+    this->needUpdateHANN_pos = false;
+    this->isConstant = false;
+    this->mnFactor = 1;
     this->TLoadingDirectPos = true;
     /*待补充*/
     return 0;
@@ -646,14 +628,13 @@ UniaxialMaterial *
 AIDMMaterial::getCopy(void)
 {
     AIDMMaterial*theCopy = new AIDMMaterial(this->getTag(), 
-        lammda, lammdaS, lammdaSV, lammdaT_pos, stressSA_pos, stressSA_neg, this->ensureIniK);
+        lammda, lammdaS, lammdaSV, lammdaT_pos, stressSA_pos, stressSA_neg);
     theCopy->TStrain = TStrain;
     theCopy->CStress = CStress;
     theCopy->CStrain = CStrain;
     theCopy->TStress = TStress;
     theCopy->CK = CK;
     theCopy->Clammda = Clammda;
-    theCopy->sectionHeight = sectionHeight;
     return theCopy;
 }
 
@@ -697,17 +678,13 @@ AIDMMaterial::updateParameter(int parameterID, Information& info)
 
 #pragma endregion
 
-void AIDMMaterial::setLammda(const double& shearSpan)
+void AIDMMaterial::setLammda(const double& Lammda)
 {
-    //return;
-    if (this->sectionHeight == 0)
-        return;
-    auto Lammda = abs(shearSpan) / this->sectionHeight;
-    Lammda = Lammda < 0.5 ? 0.5 : Lammda;
-    Lammda = Lammda > 5 ? 5 : Lammda;
-    if (abs(this->lammda - Lammda) > 0.2)
+    auto target_lammda = Lammda < 0.5 ? 0.5 : Lammda;
+    target_lammda = target_lammda > 5 ? 5 : target_lammda;
+    if (abs(this->lammda - target_lammda) > 0.25)
     {
-        this->lammda = Lammda;
+        this->lammda = target_lammda;
         needUpdateBANN = true;
         if(CstrainMax != 0)
             needUpdateHANN_pos = true;
@@ -718,19 +695,20 @@ void AIDMMaterial::setLammda(const double& shearSpan)
 
 bool AIDMMaterial::checkCapacity(const double& Moment, const int& eleTag)
 {
-    if (!isAvailabelAIDM())
-        return true;
+    /*非有效的AIDM对象*/
+    if (!this->isAvailabelAIDM()) return true;
+    /*承载力限值系数  超过转为弹性*/
     auto limitFactor = 0.8;
+    /*计算构件承载力*/
     auto capacity = Moment < 0 ? this->stressSA_neg * this->stressFactor_neg : 
          this->stressSA_pos * this->stressFactor_pos;
-     if (abs(Moment) < capacity * limitFactor)
-         return true;
-     /*if (Moment > 0)
-         this->stressSA_pos = abs(Moment) * ( 1 / limitFactor);
-     else this->stressSA_neg = abs(Moment)* (1 / limitFactor);*/
+    /*承载力满足需求*/
+     if (abs(Moment) < capacity * limitFactor)  return true;
+     //将构件转化为弹性
      opserr << "Warinning: the capacity of AIDMBeamColumn " << eleTag << " with AIDMMaterial " << this->getTag() <<
          " is too weak: convert to elastic automatically."<< endln;
-     this->isToElastic = true;
+     //刚度转为弹性 刚度为割线刚度 
+     this->isConstant = true;
      K = this->CStress / this->CStrain;
      return false;
 }
@@ -758,33 +736,30 @@ double AIDMMaterial::getStressOnBackbone(const double& drift)
     return drift > 0? y * capacity : -y * capacity;
 }
 
-void AIDMMaterial::setInitialK(double iniK, bool isToElastic)
+void AIDMMaterial::setInitialK(const double iniK)
 {
-    //Initial Boundary 获得初始刚度值
-    this->initialK = iniK;
-    this->mnFactor = 1;
-    //Elastic 单元转化为弹性
-    this->isToElastic = isToElastic;
-    //转化为弹性直接获得刚度
-    if (this->isToElastic)
-    {
-        K = this->initialK;
-        return;
-    }
-    else if (!this->ensureIniK) return;
+    //是否为有效单元
+    if (!this->isAvailabelAIDM()) return;
+    /*初始化调整系数*/
+    this->mnFactor = 0;
+    /*用于计算初始刚度的应变*/
     auto initial_strain_pos = backbone_inidStrainFactor * strainC_pos;
     auto initial_strain_neg = backbone_inidStrainFactor * -strainC_neg;
+    /*刚度系数*/
     auto factorpos = 0.0;
     auto factorneg = 0.0;
-    while (factorpos < 0.8 && factorneg < 0.8)
+    while (factorpos < 1.0 && factorneg < 1.0)
     {
-        mnFactor += 1;
+        /*第一次进入 等于1*/
+        this->mnFactor += 1;
+        /*计算初始刚度*/
         auto initial_strain_K_pos = this->getStressOnBackbone(initial_strain_pos) / initial_strain_pos;
         auto initial_strain_K_neg = this->getStressOnBackbone(initial_strain_neg) / initial_strain_neg;
-        factorpos = initial_strain_K_pos / this->initialK;
-        factorneg = initial_strain_K_neg / this->initialK;
-        if (mnFactor == 5)
-            return;
+        /*更新刚度系数*/
+        factorpos = initial_strain_K_pos / iniK;
+        factorneg = initial_strain_K_neg / iniK;
+        /*设定上限值 不然将导致曲线畸形*/
+        if (mnFactor == 5) return;
     }
 }
 

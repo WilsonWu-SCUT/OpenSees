@@ -63,8 +63,8 @@ class AIDMMaterial : public UniaxialMaterial
       };
 
   public:
-      AIDMMaterial(int tag, double height, double width, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg, bool ensureIniK = true);
-      AIDMMaterial(int tag, double lammda, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg, bool ensureIniK = true);
+      AIDMMaterial(int tag, double height, double width, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg);
+      AIDMMaterial(int tag, double lammda, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg);
       AIDMMaterial();
     ~AIDMMaterial();
 
@@ -92,7 +92,6 @@ public:
     int setTrialStrain(double strain, double strainRate = 0.0); 
     int setTrial(double strain, double &stress, double &tangent, double strainRate = 0.0); 
     double getStrain(void) {return TStrain;};
-    bool iskill(void) { return this->isKill; };
     double getLammda(void) { return this->Clammda; }
     double getStress(void);
     double getTangent(void);
@@ -115,13 +114,24 @@ public:
 
   public:
     //设定剪跨比
-    void setLammda(const double& shearSpan);
+     void setLammda(const double& Lammda);
+     //设定承载力
+     inline void setCapcacity(const double& m_pos, const double& m_neg)
+     {
+         this->stressSA_pos = m_pos;
+         this->stressSA_neg = m_neg;
+     };
     //判断承载力是否越界
     bool checkCapacity(const double& Moment, const int& eleTag);
     //设定初始刚度
-    void setInitialK(double K, bool isToElastic);
-
-  protected:
+    void setInitialK(const double K);
+    //设定纵筋配筋比
+    inline void setlammdaT_pos(const double& lammdaT)
+    {
+        this->lammdaT_pos = lammdaT;
+    }
+    //是否为有效的AIDM对象
+    bool isAvailabelAIDM() const;
 
   private:
       //从骨架上计算应力
@@ -146,8 +156,6 @@ public:
       void updateSkeletonParams();
       //更新滞回参数
       void updateHystereticParams(bool is_pos);
-      //是否为有效的AIDM对象
-      bool isAvailabelAIDM() const;
 
   private:
       //骨架曲线指向点应变系数
@@ -158,7 +166,7 @@ public:
       double initialLammda = 4;
       //杀死单元的应力系数
       double killStressFactor = 0.2;
-      int mnFactor = 1;
+     
 
   private: /*力学参数*/
       //剪跨比（需要revert）
@@ -168,6 +176,8 @@ public:
       //峰值承载力
       double stressSA_pos;
       double stressSA_neg;
+      //形状调整系数
+      int mnFactor;
 
   private: /*基本参数*/
       //纵筋配筋特征值
@@ -178,8 +188,6 @@ public:
       //受拉纵筋与受压纵筋比
       //通过PMMSection计算
       double lammdaT_pos;
-     //通过PMM截面获取
-      double sectionHeight;
 
     #pragma region AIDM参数
   private:   /*是否更新本构参数*/
@@ -212,10 +220,7 @@ public:
 
     #pragma endregion
 
-   private: /*刚度相关*/
-      //初始刚度
-      double initialK;
-      bool ensureIniK;
+   private:
       //Stiffness 刚度
       double K;
       double CK;
@@ -239,10 +244,8 @@ public:
     bool TLoadingDirectPos;
 
   private:
-    //单元是否杀死
-    bool isKill;
-    //单元是否弹性
-    bool isToElastic;
+    //刚度是否转为弹性
+    bool isConstant;
 };
 
 

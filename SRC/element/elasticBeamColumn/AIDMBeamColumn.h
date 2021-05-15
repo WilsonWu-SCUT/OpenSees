@@ -127,12 +127,17 @@ private:
       /*初始化长度*/
       double initialLength;
 
+private:
+    PMMSection* sectionI_ptr;
+    PMMSection* sectionJ_ptr;
+    int sectionI_tag_;
+    int sectionJ_tag_;
+
   private:
     double A,E,G,Jx,Iy,Iz;
 
     /*AIDM材料指针*/
     AIDMMaterial** AIDMs;
-    PMMSection** Sections;
     int numAIDMs;
 
     static Matrix K;

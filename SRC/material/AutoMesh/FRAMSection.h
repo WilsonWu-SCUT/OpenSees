@@ -59,11 +59,13 @@ namespace AutoMesh
 		//设定柱纵筋位置
 		void set_column_bars(const double& cover);
 
-	private:
+	public:
 		//获得截面最大高度
 		double get_H(void) const;
 		//获得截面最大宽度
 		double get_B(void) const;
+
+	private:
 		//获得工字钢标准数据格式
 		std::vector<double> get_I_dimetion_vec(void) const;
 		//获得十字钢标准数据格式

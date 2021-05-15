@@ -49,8 +49,7 @@
 #include <stdlib.h>
 #include <string>
 #include <elementAPI.h>
-
-//#include <sstream>
+#include "PMMSection.h"
 
 
 void AIDMBeamColumn::setStiffMatrix(const double& L)
@@ -224,83 +223,6 @@ void AIDMBeamColumn::setBasicForce(const double& L, const Vector& v)
 	q(2) += q0[2];
 	q(3) += q0[3];
 	q(4) += q0[4];
-}
-
-int AIDMBeamColumn::addPointLoad(const double& N, const double& Py, const double& Pz, const double& aOverL, const double& L)
-{
-	if (aOverL < 0.0 || aOverL > 1.0)
-		return 0;
-
-	double a = aOverL * L;
-	double b = L - a;
-
-	// Reactions in basic system
-	p0[0] -= N;
-	double V1, V2;
-	V1 = Py * (1.0 - aOverL);
-	V2 = Py * aOverL;
-	p0[1] -= V1;
-	p0[2] -= V2;
-	V1 = Pz * (1.0 - aOverL);
-	V2 = Pz * aOverL;
-	p0[3] -= V1;
-	p0[4] -= V2;
-
-	double L2 = 1.0 / (L * L);
-	double a2 = a * a;
-	double b2 = b * b;
-
-	// Fixed end forces in basic system
-	q0[0] -= N * aOverL;
-	double M1 = 0;
-	double M2 = 0;
-
-	if (iAIDMTag != -1 && jAIDMTag != -1) {
-		M1 = -a * b2 * Py * L2;
-		M2 = a2 * b * Py * L2;
-		q0[1] += M1;
-		q0[2] += M2;
-		M1 = -a * b2 * Pz * L2;
-		M2 = a2 * b * Pz * L2;
-		q0[3] -= M1;
-		q0[4] -= M2;
-	}
-	else if (jAIDMTag != -1) {
-		M2 = 0.5 * Py * a * b * L2 * (a + L);
-		q0[2] += M2;
-		M2 = 0.5 * Pz * a * b * L2 * (a + L);
-		q0[4] -= M2;
-	}
-	else if (iAIDMTag != -1) {
-		M1 = -0.5 * Py * a * b * L2 * (b + L);
-		q0[1] += M1;
-		M1 = -0.5 * Pz * a * b * L2 * (b + L);
-		q0[3] -= M1;
-	}
-	return 0;
-}
-
-void AIDMBeamColumn::addGeneralPartialLoad(const double& Ni, const double& Nj, const double& Pyi, const double& Pyj,
-	const double& Pzi, const double& Pzj, const double& aOverL, const double& bOverL, const double& L)
-{
-	//拆分基本长度
-	double deltaLengthFactor = 1E-6;
-	double lengthFactor = deltaLengthFactor * L;
-	//调换位置
-	double minOverL = aOverL <= bOverL ? aOverL : bOverL;
-	double maxOverL = aOverL <= bOverL ? bOverL : aOverL;
-	//距离
-	double distOverL = maxOverL - minOverL;
-	//从左到右开始遍历
-	for (double overL = deltaLengthFactor / 2; overL <= distOverL; overL += deltaLengthFactor)
-	{
-		double Py = ((Pyj - Pyi) / distOverL * overL + Pyi) * lengthFactor;
-		double Pz = ((Pzj - Pzi) / distOverL * overL + Pzi) * lengthFactor;
-		double N = ((Nj - Ni) / distOverL * overL + Ni) * lengthFactor;
-		double targetX = minOverL + overL;
-		//添加节点荷载
-		addPointLoad(N, Py, Pz, targetX, L);
-	}
 }
 
 Matrix AIDMBeamColumn::K(12, 12);
@@ -509,6 +431,9 @@ void AIDMBeamColumn::setRigidEnd(const double& rigidLength, bool isI, double* di
 		jntOffset(i) = direction[i] * factor;
 }
 
+#pragma region Constant
+
+
 int
 AIDMBeamColumn::getNumExternalNodes(void) const
 {
@@ -585,132 +510,6 @@ AIDMBeamColumn::setDomain(Domain* theDomain)
 	}
 }
 
-int
-AIDMBeamColumn::commitState()
-{
-	//Ger local resist force
-	auto& F = this->getLocalResistingForce();
-	//Calculate Shear Span
-	this->AIDMs[0]->setLammda(F(4) / F(2));
-	this->AIDMs[1]->setLammda(F(10) / F(8));
-	int retVal = 0;
-	// call element commitState to do any base class stuff
-	if ((retVal = this->Element::commitState()) != 0) {
-		opserr << "ElasticBeam3d::commitState () - failed in base class";
-	}
-	//AIDM CommitState
-	for (int i = 0; i < numAIDMs; i++)
-	{
-		retVal += AIDMs[i]->commitState();
-	}
-	//is Kill
-	if (this->AIDMs[0]->iskill()) iAIDMTag = -1;
-	if (this->AIDMs[1]->iskill()) jAIDMTag = -1;
-
-	retVal += theCoordTransf->commitState();
-	//is load already const
-	if(this->isGravityConst)
-		return retVal;
-	//is not the same load factor
-	if (this->CLoadFactor != this->TLoadFactor)
-	{
-		this->CLoadFactor = this->TLoadFactor;
-		return retVal;
-	}
-	if(this->CLoadFactor == 0)
-		return retVal;
-	this->AIDMs[0]->checkCapacity(F(4), this->getTag());
-	this->AIDMs[1]->checkCapacity(-F(10), this->getTag());
-	this->isGravityConst = true;
-}
-
-int
-AIDMBeamColumn::revertToLastCommit()
-{
-	int retVal = theCoordTransf->revertToLastCommit();
-	//AIDM CommitState
-	for (int i = 0; i < numAIDMs; i++)
-	{
-		retVal += AIDMs[i]->revertToLastCommit();
-	}
-	return retVal;
-}
-
-int
-AIDMBeamColumn::revertToStart()
-{
-	return theCoordTransf->revertToStart();
-}
-
-int
-AIDMBeamColumn::update(void)
-{
-	// Update the transformation
-	int retVal = theCoordTransf->update();
-	// Get basic deformations
-	const Vector& v = theCoordTransf->getBasicTrialDisp();
-	//initial stiffness
-	if (!this->isInitial)
-	{
-		double L = theCoordTransf->getInitialLength();
-		// Update the transformation
-		double oneOverL = 1.0 / L;
-		double EoverL = E * oneOverL;
-		double EIyoverL3 = 3.0 * Iy * EoverL;		// 3EIy/L
-		//is elatic 
-		if(iAIDMTag == -1) 
-			AIDMs[0]->setInitialK(0, true);
-		else
-		{
-			bool isElastic = iAIDMTag == -2;
-			if (jAIDMTag == -1)
-				AIDMs[0]->setInitialK(EIyoverL3, isElastic);
-			else AIDMs[0]->setInitialK(EIyoverL3 * 2, isElastic);
-		}
-		if (jAIDMTag == -1) AIDMs[1]->setInitialK(0, true);
-		else 
-		{
-			bool isElastic = jAIDMTag == -2;
-			if (jAIDMTag == -1)
-				AIDMs[1]->setInitialK(EIyoverL3, isElastic);
-			else AIDMs[1]->setInitialK(EIyoverL3 * 2, isElastic);
-		}
-		this->isInitial = true;
-	}
-	//IS initial 
-	retVal += AIDMs[0]->setTrialStrain(v(3));
-	retVal += AIDMs[1]->setTrialStrain(-v(4));
-
-	return retVal < 0? -1: 0;
-}
-
-const Matrix&
-AIDMBeamColumn::getTangentStiff(void)
-{
-	const Vector& v = theCoordTransf->getBasicTrialDisp();
-
-	double L = theCoordTransf->getInitialLength();
-
-	//设定刚度
-	setStiffMatrix(L);
-	//设定局部力
-	setBasicForce(L, v);
-
-	return theCoordTransf->getGlobalStiffMatrix(kb, q);
-}
-
-
-const Matrix&
-AIDMBeamColumn::getInitialStiff(void)
-{
-	//  const Vector &v = theCoordTransf->getBasicTrialDisp();
-
-	double L = theCoordTransf->getInitialLength();
-	//设定刚度
-	setStiffMatrix(L);
-	return theCoordTransf->getInitialGlobalStiffMatrix(kb);
-}
-
 const Matrix&
 AIDMBeamColumn::getMass(void)
 {
@@ -738,248 +537,14 @@ AIDMBeamColumn::zeroLoad(void)
 	return;
 }
 
-int 
-AIDMBeamColumn::addLoad(ElementalLoad *theLoad, double loadFactor)
-{
-  int type;
-  const Vector &data = theLoad->getData(type, loadFactor);
-  double L = theCoordTransf->getInitialLength();
-  TLoadFactor = loadFactor;
-
-  if (type == LOAD_TAG_Beam3dUniformLoad) 
-  {
-	  double wy = data(0) * loadFactor;  // Transverse
-	  double wz = data(1) * loadFactor;  // Transverse
-	  double wx = data(2) * loadFactor;  // Axial (+ve from node I to J)
-
-	  double Vy = 0.5 * wy * L;
-	  double Mz = Vy * L / 6.0; // wy*L*L/12
-	  double Vz = 0.5 * wz * L;
-	  double My = Vz * L / 6.0; // wz*L*L/12
-	  double P = wx * L;
-
-	  // Reactions in basic system
-	  p0[0] -= P;
-	  p0[1] -= Vy;
-	  p0[2] -= Vy;
-	  p0[3] -= Vz;
-	  p0[4] -= Vz;
-
-	  // Fixed end forces in basic system
-	  q0[0] -= 0.5 * P;
-
-	  if (iAIDMTag != -1 && jAIDMTag != -1)
-      {
-		  q0[1] -= Mz;
-		  q0[2] += Mz;
-		  q0[3] += My;
-		  q0[4] -= My;
-	  }
-	  else if (jAIDMTag != -1)
-      {
-		  q0[2] += wy * L * L / 8;
-		  q0[4] -= wz * L * L / 8;
-	  }
-	  else if (iAIDMTag != -1)
-      {
-		  q0[1] -= wy * L * L / 8;
-		  q0[3] += wz * L * L / 8;
-	  }
-  }
-  else if (type == LOAD_TAG_Beam3dPartialUniformLoad) {
-	  double wa = data(2) * loadFactor;  // Axial
-	  double wy = data(0) * loadFactor;  // Transverse
-	  double wz = data(1) * loadFactor;  // Transverse
-	  double a = data(3) * L;
-	  double b = data(4) * L;
-	  double c = 0.5 * (b + a);
-	  double cOverL = c / L;
-
-	  double P = wa * (b - a);
-	  double Fy = wy * (b - a);
-	  double Fz = wz * (b - a);
-
-	  // Reactions in basic system
-	  p0[0] -= P;
-	  double V1, V2;
-	  V1 = Fy * (1.0 - cOverL);
-	  V2 = Fy * cOverL;
-	  p0[1] -= V1;
-	  p0[2] -= V2;
-	  V1 = Fz * (1.0 - cOverL);
-	  V2 = Fz * cOverL;
-	  p0[3] -= V1;
-	  p0[4] -= V2;
-
-	  // Fixed end forces in basic system
-	  q0[0] -= P * cOverL;
-	  double M1, M2;
-	  double beta2 = (1 - cOverL) * (1 - cOverL);
-	  double alfa2 = (cOverL) * (cOverL);
-	  double gamma2 = (b - a) / L;
-	  gamma2 *= gamma2;
-
-	  M1 = -wy * (b - a) * (c * beta2 + gamma2 / 12.0 * (L - 3 * (L - c)));
-	  M2 = wy * (b - a) * ((L - c) * alfa2 + gamma2 / 12.0 * (L - 3 * c));
-	  q0[1] += M1;
-	  q0[2] += M2;
-	  M1 = -wz * (b - a) * (c * beta2 + gamma2 / 12.0 * (L - 3 * (L - c)));
-	  M2 = wz * (b - a) * ((L - c) * alfa2 + gamma2 / 12.0 * (L - 3 * c));
-	  q0[3] -= M1;
-	  q0[4] -= M2;
-  }
-  else if (type == LOAD_TAG_Beam3dPointLoad) 
-  {
-      //General Point Load
-      addPointLoad(data(2) * loadFactor, data(0) * loadFactor, data(1) * loadFactor, data(3), L);
-  }
-  //多态荷载模式
-  //data[0]: Pyi
-  //data[1]: Pzi
-  //data[2]: Ni
-  //data[3]: Pyj
-  //data[4]: Pzj
-  //data[5]: Nj
-  //data[6]: aOverL
-  //data[7]: bOverL
-  else if (type == LOAD_TAG_Beam3dGenranlPartialLoad)
-  {
-	  double Pyi = data(0) * loadFactor;
-	  double Pzi = data(1) * loadFactor;
-	  double Ni = data(2) * loadFactor;
-
-	  double Pyj = data(3) * loadFactor;
-	  double Pzj = data(4) * loadFactor;
-	  double Nj = data(5) * loadFactor;
-
-	  double aOverL = data(6);
-	  double bOverL = data(7);
-
-	  addGeneralPartialLoad(Ni, Nj, Pyi, Pyj, Pzi, Pzj, aOverL, bOverL, L);
-  }
-
-  //三角形荷载
-  //data[0]: Py
-  //data[1]: Pz
-  //data[2]: aOverL
-  else if (type == LOAD_TAG_Beam3dTriangularLoad)
-  {
-	  double Py = data(0) * loadFactor;
-	  double Pz = data(1) * loadFactor;
-
-	  double aOverL = data(2);
-	  //左侧三角形
-	  addGeneralPartialLoad(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
-	  //右侧三角形
-	  addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, aOverL, 1, L);
-  }
-
-  //梯形荷载
-  //data[0]: Py
-  //data[1]: Pz
-  //data[2]: aOverL
-  //data[3]: bOverL
-  else if (type == LOAD_TAG_Beam3dTrapezoidLoad)
-  {
-	  double Py = data(0) * loadFactor;
-	  double Pz = data(1) * loadFactor;
-
-	  double aOverL = data(2);
-	  double bOverL = data(3);
-	  //左侧三角形
-	  addGeneralPartialLoad(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
-	  //中央三角形
-	  addGeneralPartialLoad(0, 0, Py, Py, Pz, Pz, aOverL, bOverL, L);
-	  //右侧三角形
-	  addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, bOverL, 1, L);
-  }
-  else 
-  {
-    opserr << "ElasticBeam3d::addLoad()  -- load type unknown for element with tag: " << this->getTag() << endln;
-    return -1;
-  }
-
-  return 0;
-}
-
 int
-AIDMBeamColumn::addInertiaLoadToUnbalance(const Vector& accel)
-{
-	return 0;
-}
-
-const Vector&
-AIDMBeamColumn::getResistingForceIncInertia()
-{
-	P = this->getResistingForce();
-
-	// add the damping forces if rayleigh damping
-	if (alphaM != 0.0 || betaK != 0.0 || betaK0 != 0.0 || betaKc != 0.0)
-		P.addVector(1.0, this->getRayleighDampingForces(), 1.0);
-
-	return P;
-}
-
-const Vector&
-AIDMBeamColumn::getResistingForce()
-{
-	// Get basic deformations
-	const Vector& v = theCoordTransf->getBasicTrialDisp();
-	// Length of the element
-	double L = theCoordTransf->getInitialLength();
-	//BasicForce
-	this->setBasicForce(L, v);
-	// Vector for reactions in basic system
-	Vector p0Vec(p0, 5);
-	return theCoordTransf->getGlobalResistingForce(q, p0Vec);
-}
-
-
-const Vector& AIDMBeamColumn::getLocalResistingForce(void)
-{
-	double N, V, M1, M2, T;
-	double L = theCoordTransf->getInitialLength();
-	double oneOverL = 1.0 / L;
-
-	// Axial
-	N = q(0);
-	P(6) = N;
-	P(0) = -N + p0[0];
-
-	// Torsion
-	T = q(5);
-	P(9) = T;
-	P(3) = -T;
-
-	// Moments about z and shears along y
-	M1 = q(1);
-	M2 = q(2);
-	P(5) = M1;
-	P(11) = M2;
-	V = (M1 + M2) * oneOverL;
-	P(1) = V + p0[1];
-	P(7) = -V + p0[2];
-
-	// Moments about y and shears along z
-	M1 = q(3);
-	M2 = q(4);
-	P(4) = M1;
-	P(10) = M2;
-	V = (M1 + M2) * oneOverL;
-	P(2) = -V + p0[3];
-	P(8) = V + p0[4];
-
-	return P;
-}
-
-int
-AIDMBeamColumn::sendSelf(int cTag, Channel& theChannel)
+AIDMBeamColumn::setParameter(const char** argv, int argc, Parameter& param)
 {
 	return -1;
 }
 
 int
-AIDMBeamColumn::recvSelf(int cTag, Channel& theChannel, FEM_ObjectBroker& theBroker)
+AIDMBeamColumn::updateParameter(int parameterID, Information& info)
 {
 	return -1;
 }
@@ -1175,6 +740,437 @@ AIDMBeamColumn::displaySelf(Renderer& theViewer, int displayMode, float fact, co
 	return res;
 }
 
+int
+AIDMBeamColumn::addInertiaLoadToUnbalance(const Vector& accel)
+{
+	return 0;
+}
+
+const Vector&
+AIDMBeamColumn::getResistingForceIncInertia()
+{
+	P = this->getResistingForce();
+
+	// add the damping forces if rayleigh damping
+	if (alphaM != 0.0 || betaK != 0.0 || betaK0 != 0.0 || betaKc != 0.0)
+		P.addVector(1.0, this->getRayleighDampingForces(), 1.0);
+
+	return P;
+}
+
+int
+AIDMBeamColumn::sendSelf(int cTag, Channel& theChannel)
+{
+	return -1;
+}
+
+int
+AIDMBeamColumn::recvSelf(int cTag, Channel& theChannel, FEM_ObjectBroker& theBroker)
+{
+	return -1;
+}
+
+int AIDMBeamColumn::addPointLoad(const double& N, const double& Py, const double& Pz, const double& aOverL, const double& L)
+{
+	if (aOverL < 0.0 || aOverL > 1.0)
+		return 0;
+
+	double a = aOverL * L;
+	double b = L - a;
+
+	// Reactions in basic system
+	p0[0] -= N;
+	double V1, V2;
+	V1 = Py * (1.0 - aOverL);
+	V2 = Py * aOverL;
+	p0[1] -= V1;
+	p0[2] -= V2;
+	V1 = Pz * (1.0 - aOverL);
+	V2 = Pz * aOverL;
+	p0[3] -= V1;
+	p0[4] -= V2;
+
+	double L2 = 1.0 / (L * L);
+	double a2 = a * a;
+	double b2 = b * b;
+
+	// Fixed end forces in basic system
+	q0[0] -= N * aOverL;
+	double M1 = 0;
+	double M2 = 0;
+
+	if (iAIDMTag != -1 && jAIDMTag != -1) {
+		M1 = -a * b2 * Py * L2;
+		M2 = a2 * b * Py * L2;
+		q0[1] += M1;
+		q0[2] += M2;
+		M1 = -a * b2 * Pz * L2;
+		M2 = a2 * b * Pz * L2;
+		q0[3] -= M1;
+		q0[4] -= M2;
+	}
+	else if (jAIDMTag != -1) {
+		M2 = 0.5 * Py * a * b * L2 * (a + L);
+		q0[2] += M2;
+		M2 = 0.5 * Pz * a * b * L2 * (a + L);
+		q0[4] -= M2;
+	}
+	else if (iAIDMTag != -1) {
+		M1 = -0.5 * Py * a * b * L2 * (b + L);
+		q0[1] += M1;
+		M1 = -0.5 * Pz * a * b * L2 * (b + L);
+		q0[3] -= M1;
+	}
+	return 0;
+}
+
+void AIDMBeamColumn::addGeneralPartialLoad(const double& Ni, const double& Nj, const double& Pyi, const double& Pyj,
+	const double& Pzi, const double& Pzj, const double& aOverL, const double& bOverL, const double& L)
+{
+	//拆分基本长度
+	double deltaLengthFactor = 1E-6;
+	double lengthFactor = deltaLengthFactor * L;
+	//调换位置
+	double minOverL = aOverL <= bOverL ? aOverL : bOverL;
+	double maxOverL = aOverL <= bOverL ? bOverL : aOverL;
+	//距离
+	double distOverL = maxOverL - minOverL;
+	//从左到右开始遍历
+	for (double overL = deltaLengthFactor / 2; overL <= distOverL; overL += deltaLengthFactor)
+	{
+		double Py = ((Pyj - Pyi) / distOverL * overL + Pyi) * lengthFactor;
+		double Pz = ((Pzj - Pzi) / distOverL * overL + Pzi) * lengthFactor;
+		double N = ((Nj - Ni) / distOverL * overL + Ni) * lengthFactor;
+		double targetX = minOverL + overL;
+		//添加节点荷载
+		addPointLoad(N, Py, Pz, targetX, L);
+	}
+}
+
+int
+AIDMBeamColumn::addLoad(ElementalLoad* theLoad, double loadFactor)
+{
+	int type;
+	const Vector& data = theLoad->getData(type, loadFactor);
+	double L = theCoordTransf->getInitialLength();
+	TLoadFactor = loadFactor;
+
+	if (type == LOAD_TAG_Beam3dUniformLoad)
+	{
+		double wy = data(0) * loadFactor;  // Transverse
+		double wz = data(1) * loadFactor;  // Transverse
+		double wx = data(2) * loadFactor;  // Axial (+ve from node I to J)
+
+		double Vy = 0.5 * wy * L;
+		double Mz = Vy * L / 6.0; // wy*L*L/12
+		double Vz = 0.5 * wz * L;
+		double My = Vz * L / 6.0; // wz*L*L/12
+		double P = wx * L;
+
+		// Reactions in basic system
+		p0[0] -= P;
+		p0[1] -= Vy;
+		p0[2] -= Vy;
+		p0[3] -= Vz;
+		p0[4] -= Vz;
+
+		// Fixed end forces in basic system
+		q0[0] -= 0.5 * P;
+
+		if (iAIDMTag != -1 && jAIDMTag != -1)
+		{
+			q0[1] -= Mz;
+			q0[2] += Mz;
+			q0[3] += My;
+			q0[4] -= My;
+		}
+		else if (jAIDMTag != -1)
+		{
+			q0[2] += wy * L * L / 8;
+			q0[4] -= wz * L * L / 8;
+		}
+		else if (iAIDMTag != -1)
+		{
+			q0[1] -= wy * L * L / 8;
+			q0[3] += wz * L * L / 8;
+		}
+	}
+	else if (type == LOAD_TAG_Beam3dPartialUniformLoad) {
+		double wa = data(2) * loadFactor;  // Axial
+		double wy = data(0) * loadFactor;  // Transverse
+		double wz = data(1) * loadFactor;  // Transverse
+		double a = data(3) * L;
+		double b = data(4) * L;
+		double c = 0.5 * (b + a);
+		double cOverL = c / L;
+
+		double P = wa * (b - a);
+		double Fy = wy * (b - a);
+		double Fz = wz * (b - a);
+
+		// Reactions in basic system
+		p0[0] -= P;
+		double V1, V2;
+		V1 = Fy * (1.0 - cOverL);
+		V2 = Fy * cOverL;
+		p0[1] -= V1;
+		p0[2] -= V2;
+		V1 = Fz * (1.0 - cOverL);
+		V2 = Fz * cOverL;
+		p0[3] -= V1;
+		p0[4] -= V2;
+
+		// Fixed end forces in basic system
+		q0[0] -= P * cOverL;
+		double M1, M2;
+		double beta2 = (1 - cOverL) * (1 - cOverL);
+		double alfa2 = (cOverL) * (cOverL);
+		double gamma2 = (b - a) / L;
+		gamma2 *= gamma2;
+
+		M1 = -wy * (b - a) * (c * beta2 + gamma2 / 12.0 * (L - 3 * (L - c)));
+		M2 = wy * (b - a) * ((L - c) * alfa2 + gamma2 / 12.0 * (L - 3 * c));
+		q0[1] += M1;
+		q0[2] += M2;
+		M1 = -wz * (b - a) * (c * beta2 + gamma2 / 12.0 * (L - 3 * (L - c)));
+		M2 = wz * (b - a) * ((L - c) * alfa2 + gamma2 / 12.0 * (L - 3 * c));
+		q0[3] -= M1;
+		q0[4] -= M2;
+	}
+	else if (type == LOAD_TAG_Beam3dPointLoad)
+	{
+		//General Point Load
+		addPointLoad(data(2) * loadFactor, data(0) * loadFactor, data(1) * loadFactor, data(3), L);
+	}
+	//多态荷载模式
+	//data[0]: Pyi
+	//data[1]: Pzi
+	//data[2]: Ni
+	//data[3]: Pyj
+	//data[4]: Pzj
+	//data[5]: Nj
+	//data[6]: aOverL
+	//data[7]: bOverL
+	else if (type == LOAD_TAG_Beam3dGenranlPartialLoad)
+	{
+		double Pyi = data(0) * loadFactor;
+		double Pzi = data(1) * loadFactor;
+		double Ni = data(2) * loadFactor;
+
+		double Pyj = data(3) * loadFactor;
+		double Pzj = data(4) * loadFactor;
+		double Nj = data(5) * loadFactor;
+
+		double aOverL = data(6);
+		double bOverL = data(7);
+
+		addGeneralPartialLoad(Ni, Nj, Pyi, Pyj, Pzi, Pzj, aOverL, bOverL, L);
+	}
+
+	//三角形荷载
+	//data[0]: Py
+	//data[1]: Pz
+	//data[2]: aOverL
+	else if (type == LOAD_TAG_Beam3dTriangularLoad)
+	{
+		double Py = data(0) * loadFactor;
+		double Pz = data(1) * loadFactor;
+
+		double aOverL = data(2);
+		//左侧三角形
+		addGeneralPartialLoad(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
+		//右侧三角形
+		addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, aOverL, 1, L);
+	}
+
+	//梯形荷载
+	//data[0]: Py
+	//data[1]: Pz
+	//data[2]: aOverL
+	//data[3]: bOverL
+	else if (type == LOAD_TAG_Beam3dTrapezoidLoad)
+	{
+		double Py = data(0) * loadFactor;
+		double Pz = data(1) * loadFactor;
+
+		double aOverL = data(2);
+		double bOverL = data(3);
+		//左侧三角形
+		addGeneralPartialLoad(0, 0, 0, Py, 0, Pz, 0, aOverL, L);
+		//中央三角形
+		addGeneralPartialLoad(0, 0, Py, Py, Pz, Pz, aOverL, bOverL, L);
+		//右侧三角形
+		addGeneralPartialLoad(0, 0, Py, 0, Pz, 0, bOverL, 1, L);
+	}
+	else
+	{
+		opserr << "AIDMBeamColumn::addLoad()  -- load type unknown for element with tag: " << this->getTag() << endln;
+		return -1;
+	}
+
+	return 0;
+}
+
+#pragma endregion
+
+int
+AIDMBeamColumn::commitState()
+{
+	//Ger local resist force
+	auto& F = this->getLocalResistingForce();
+	//Calculate Shear Span
+	this->sectionI_ptr->setLammda(F, true);
+	this->sectionJ_ptr->setLammda(F, false);
+	int retVal = 0;
+	// call element commitState to do any base class stuff
+	if ((retVal = this->Element::commitState()) != 0) {
+		opserr << "AIDMBeamColumn::commitState () - failed in base class";
+	}
+	//AIDM CommitState
+	retVal += this->sectionI_ptr->commitState();
+	retVal += this->sectionJ_ptr->commitState();
+	//局部向量更新
+	retVal += theCoordTransf->commitState();
+	//is load already const
+	if(this->isGravityConst) return retVal;
+	//is not the same load factor
+	if (this->CLoadFactor != this->TLoadFactor)
+	{
+		this->CLoadFactor = this->TLoadFactor;
+		return retVal;
+	}
+	//未加载
+	if(this->CLoadFactor == 0) return retVal;
+	//防止承载力越界
+	this->sectionI_ptr->checkCapacity(F, this->getTag(), true);
+	this->sectionI_ptr->checkCapacity(F, this->getTag(), false);
+	this->isGravityConst = true;
+}
+
+int
+AIDMBeamColumn::revertToLastCommit()
+{
+	int retVal = theCoordTransf->revertToLastCommit();
+	//AIDM CommitState
+	for (int i = 0; i < numAIDMs; i++)
+	{
+		retVal += AIDMs[i]->revertToLastCommit();
+	}
+	return retVal;
+}
+
+int
+AIDMBeamColumn::revertToStart()
+{
+	return theCoordTransf->revertToStart();
+}
+
+int
+AIDMBeamColumn::update(void)
+{
+	// Update the transformation
+	int retVal = theCoordTransf->update();
+	// Get basic deformations
+	const Vector& v = theCoordTransf->getBasicTrialDisp();
+	//initial stiffness
+	if (!this->isInitial)
+	{
+		//获得构件长度
+		double L = theCoordTransf->getInitialLength();
+		//i端非铰
+		if (this->sectionI_tag_ != -1)
+			this->sectionI_ptr->setInitialK(L,
+				this->sectionJ_tag_ != -1 ? 6 : 3);
+		if (this->sectionJ_tag_ != -1)
+			this->sectionJ_ptr->setInitialK(L,
+				this->sectionI_tag_ != -1 ? 6 : 3);
+		//完成初始化
+		this->isInitial = true;
+	}
+	retVal += this->sectionI_ptr->setTrialDeformation(v, true);
+	retVal += this->sectionJ_ptr->setTrialDeformation(v, false);
+	return retVal;
+}
+
+const Matrix&
+AIDMBeamColumn::getTangentStiff(void)
+{
+	const Vector& v = theCoordTransf->getBasicTrialDisp();
+
+	double L = theCoordTransf->getInitialLength();
+
+	//设定刚度
+	setStiffMatrix(L);
+	//设定局部力
+	setBasicForce(L, v);
+
+	return theCoordTransf->getGlobalStiffMatrix(kb, q);
+}
+
+const Matrix&
+AIDMBeamColumn::getInitialStiff(void)
+{
+	//  const Vector &v = theCoordTransf->getBasicTrialDisp();
+
+	double L = theCoordTransf->getInitialLength();
+	//设定刚度
+	setStiffMatrix(L);
+	return theCoordTransf->getInitialGlobalStiffMatrix(kb);
+}
+
+const Vector&
+AIDMBeamColumn::getResistingForce()
+{
+	// Get basic deformations
+	const Vector& v = theCoordTransf->getBasicTrialDisp();
+	// Length of the element
+	double L = theCoordTransf->getInitialLength();
+	//BasicForce
+	this->setBasicForce(L, v);
+	// Vector for reactions in basic system
+	Vector p0Vec(p0, 5);
+	return theCoordTransf->getGlobalResistingForce(q, p0Vec);
+}
+
+
+const Vector& AIDMBeamColumn::getLocalResistingForce(void)
+{
+	double N, V, M1, M2, T;
+	double L = theCoordTransf->getInitialLength();
+	double oneOverL = 1.0 / L;
+
+	// Axial
+	N = q(0);
+	P(6) = N;
+	P(0) = -N + p0[0];
+
+	// Torsion
+	T = q(5);
+	P(9) = T;
+	P(3) = -T;
+
+	// Moments about z and shears along y
+	M1 = q(1);
+	M2 = q(2);
+	P(5) = M1;
+	P(11) = M2;
+	V = (M1 + M2) * oneOverL;
+	P(1) = V + p0[1];
+	P(7) = -V + p0[2];
+
+	// Moments about y and shears along z
+	M1 = q(3);
+	M2 = q(4);
+	P(4) = M1;
+	P(10) = M2;
+	V = (M1 + M2) * oneOverL;
+	P(2) = -V + p0[3];
+	P(8) = V + p0[4];
+
+	return P;
+}
+
+
 Response*
 AIDMBeamColumn::setResponse(const char** argv, int argc, OPS_Stream& output)
 {
@@ -1320,17 +1316,3 @@ AIDMBeamColumn::getResponse(int responseID, Information& eleInfo)
 		return -1;
 	}
 }
-
-
-int
-AIDMBeamColumn::setParameter(const char** argv, int argc, Parameter& param)
-{
-	return -1;
-}
-
-int
-AIDMBeamColumn::updateParameter(int parameterID, Information& info)
-{
-	return -1;
-}
-
