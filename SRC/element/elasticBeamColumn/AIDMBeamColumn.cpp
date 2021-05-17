@@ -52,170 +52,74 @@
 #include "PMMSection.h"
 
 
-void AIDMBeamColumn::setStiffMatrix(const double& L)
+void AIDMBeamColumn::setStiffMatrix(const double& L, bool is_initial)
 {
-	double oneOverL = 1.0 / L;
-	double EoverL = E * oneOverL;
-	double EAoverL = A * EoverL;			// EA/L
-
-	double EIzoverL2 = 2.0 * Iz * EoverL;		// 2EIz/L
-	double EIzoverL3 = 3.0 * Iz * EoverL;		// 3EIz/L
-	double EIzoverL4 = 2.0 * EIzoverL2;		// 4EIz/L
-
-	double EIyoverL2 = 2.0 * Iy * EoverL;		// 2EIy/L
-	double EIyoverL3 = 3.0 * Iy * EoverL;		// 3EIy/L
-	double EIyoverL4 = 2.0 * EIyoverL2;		// 4EIy/L
-
-	double GJoverL = G * Jx * oneOverL;         // GJ/L
-
+	//初始化
 	kb.Zero();
-
-	kb(0, 0) = EAoverL;
-	kb(5, 5) = GJoverL;
-	kb(3, 3) = AIDMs[0]->getTangent();
-	kb(4, 4) = AIDMs[1]->getTangent();
-
-	if (iAIDMTag == -1)
+	//两端铰接 轴向刚度 抗扭刚度 
+	if (this->sectionI_tag_ == -1 && this->sectionJ_tag_ == -1)
 	{
-		//all release
-		if (jAIDMTag == -1)
-		{
-			// not thing to do
-		}
-		//i release j elastic
-		else if (jAIDMTag == -2)
-		{
-			kb(2, 2) = EIzoverL3;
-			kb(4, 4) = EIyoverL3;
-		}
-		//i release j aidm
-		else
-		{
-			kb(2, 2) = EIzoverL3;
-		}
+		kb(0, 0) = 3E4 * 500 * 500 / L;
+		kb(5, 5) = 1E4 * 1E10 / L;
+		return;
 	}
-	else if (iAIDMTag == -2)
+	//J端不铰接
+	if (this->sectionJ_tag_ != -1)
 	{
-		// i elastic j release
-		if (jAIDMTag == -1)
-		{
-			kb(1, 1) = EIzoverL3;
-		}
-		//ij elastic
-		else if (jAIDMTag == -2)
-		{
-			kb(1, 1) = kb(2, 2) = EIzoverL3 * 2;
-		}
-		//i elastic j aidm
-		else
-		{
-			kb(1, 1) = kb(2, 2) = EIzoverL3 * 2;
-		}
+		//轴向刚度 扭转刚度
+		kb(0, 0) = this->sectionJ_ptr->EAoverL(L);
+		kb(5, 5) = this->sectionJ_ptr->GJoverL(L);
+		//转动刚度
+		auto sectionK = is_initial? this->sectionJ_ptr->getInitialTangent():
+			this->sectionJ_ptr->getSectionTangent();
+		kb(2, 2) = sectionK(0, 0);
+		kb(4, 4) = sectionK(1, 1);
 	}
-	else
+	//I端不铰接
+	if (this->sectionI_tag_ != -1)
 	{
-		//Release
-		if (jAIDMTag == -1)
-		{
-			kb(1, 1) = EIzoverL3;
-		}
-		//Elastic
-		else if (jAIDMTag == -2)
-		{
-			kb(1, 1) = kb(2, 2) = EIzoverL3 * 2;
-		}
-		else
-		{
-			kb(1, 1) = kb(2, 2) = EIzoverL3 * 2;
-		}
+		//轴向刚度 扭转刚度
+		kb(0, 0) = this->sectionI_ptr->EAoverL(L);
+		kb(5, 5) = this->sectionI_ptr->GJoverL(L);
+		//转动刚度
+		auto sectionK = is_initial ? this->sectionI_ptr->getInitialTangent() :
+			this->sectionI_ptr->getSectionTangent();
+		kb(1, 1) = sectionK(0, 0);
+		kb(3, 3) = sectionK(1, 1);
 	}
-
 }
 
 void AIDMBeamColumn::setBasicForce(const double& L, const Vector& v)
 {
-	double oneOverL = 1.0 / L;
-	double EoverL = E * oneOverL;
-	double EAoverL = A * EoverL;			// EA/L
-	double EIzoverL2 = 2.0 * Iz * EoverL;		// 2EIz/L
-	double EIzoverL3 = 3.0 * Iz * EoverL;		// 3EIz/L
-	double EIzoverL4 = 2.0 * EIzoverL2;		// 4EIz/L
-
-	double EIyoverL2 = 2.0 * Iy * EoverL;		// 2EIy/L
-	double EIyoverL3 = 3.0 * Iy * EoverL;		// 3EIy/L
-	double EIyoverL4 = 2.0 * EIyoverL2;		// 4EIy/L
-
-	double GJoverL = G * Jx * oneOverL;         // GJ/L
-
 	// Zero for integration
 	q.Zero();
-
-	q(0) = EAoverL * v(0);
-	q(5) = GJoverL * v(5);
-	q(3) = AIDMs[0]->getStress();
-	q(4) = -AIDMs[1]->getStress();
-
-	if (iAIDMTag == -1)
+	//两端铰接 轴向刚度 抗扭刚度 
+	if (this->sectionI_tag_ == -1 && this->sectionJ_tag_ == -1)
 	{
-		q(1) = 0; q(3) = 0;
-		//all release
-		if (jAIDMTag == -1)
-		{
-			q(2) = 0; q(4) = 0;
-		}
-		//i release j elastic
-		else if (jAIDMTag == -2)
-		{
-			q(2) = EIzoverL3 * v(2);
-			q(4) = EIyoverL3 * v(4);
-		}
-		//i release j aidm
-		else
-		{
-			q(2) = EIzoverL3 * v(2);
-		}
+		q(0) = 3E4 * 500 * 500 / L * v(0);
+		q(5) = 1E4 * 1E10 / L * v(5);
+		return;
 	}
-	else if (iAIDMTag == -2)
+	//J端不铰接
+	if (this->sectionJ_tag_ != -1)
 	{
-		// i elastic j release
-		if (jAIDMTag == -1)
-		{
-			q(2) = 0; q(4) = 0;
-			q(1) = EIzoverL3 * v(1);
-		}
-		//ij elastic
-		else if (jAIDMTag == -2)
-		{
-			q(1) = EIzoverL3 * 2 * v(1);
-			q(2) = EIzoverL3 * 2 * v(2);
-		}
-		//i elastic j aidm
-		else
-		{
-			q(1) = EIzoverL3 * 2 * v(1);
-			q(2) = EIzoverL3 * 2 * v(2);
-		}
+		q(0) = this->sectionJ_ptr->EAoverL(L) * v(0);
+		q(5) = this->sectionJ_ptr->GJoverL(L) * v(5);
+		//转动刚度
+		auto secStress = this->sectionJ_ptr->getStressResultant();
+		q(2) = secStress(0);
+		q(4) = secStress(1);
 	}
-	else
+	//I端不铰接
+	if (this->sectionI_tag_ != -1)
 	{
-		//i stiffness
-		//Release
-		if (jAIDMTag == -1)
-		{
-			q(2) = 0; q(4) = 0;
-			q(1) = EIzoverL3 * v(1);
-		}
-		//Elastic
-		else if (jAIDMTag == -2)
-		{
-			q(1) = EIzoverL3 * 2 * v(1);
-			q(2) = EIzoverL3 * 2 * v(2);
-		}
-		else
-		{
-			q(1) = EIzoverL3 * 2 * v(1);
-			q(2) = EIzoverL3 * 2 * v(2);
-		}
+		//轴向刚度 扭转刚度
+		q(0) = this->sectionI_ptr->EAoverL(L) * v(0);
+		q(5) = this->sectionI_ptr->GJoverL(L) * v(5);
+		//转动刚度
+		auto secStress = this->sectionI_ptr->getStressResultant();
+		q(1) = secStress(0);
+		q(3) = secStress(1);
 	}
 
 	q(0) += q0[0];
@@ -232,8 +136,8 @@ Matrix AIDMBeamColumn::kb(6, 6);
 void* OPS_AIDMBeamColumn(void)
 {
 	int numArgs = OPS_GetNumRemainingInputArgs();
-	if (numArgs < 10 && numArgs != 5) {
-		opserr << "insufficient arguments:eleTag,iNode,jNode,A,E,G,J,Iy,Iz,transfTag\n";
+	if (numArgs < 6 ) {
+		opserr << "insufficient arguments:eleTag,iNode,jNode,transfTag,sectionTagI,sectionTagJ\n";
 		return 0;
 	}
 
@@ -255,9 +159,6 @@ void* OPS_AIDMBeamColumn(void)
 	double rigidEnd[2];
 	int transfTag, secTag;
 
-	//Section stiffness
-	numData = 6;
-	if (OPS_GetDoubleInput(&numData, &data[0]) < 0) return 0;
 	//TransfTag
 	numData = 1;
 	if (OPS_GetIntInput(&numData, &transfTag) < 0) return 0;
@@ -266,7 +167,8 @@ void* OPS_AIDMBeamColumn(void)
 		opserr << "no CrdTransf is found\n";
 		return 0;
 	}
-	//AIDMS
+
+	//Sections
 	int numAIDMS = 2;
 	std::vector<int> vec = {};
 	int aidmTags[2];
@@ -275,6 +177,7 @@ void* OPS_AIDMBeamColumn(void)
 	{
 		vec.push_back(aidmTags[i]);
 	}
+
 	//RigidEnds
 	numData = 2;
 	if (OPS_GetDoubleInput(&numData, &rigidEnd[0]) < 0)
@@ -282,49 +185,62 @@ void* OPS_AIDMBeamColumn(void)
 		rigidEnd[0] = 0;
 		rigidEnd[1] = 0;
 	}
-	return new AIDMBeamColumn(iData[0], data[0], data[1], data[2], data[3], data[4],
-		data[5], iData[1], iData[2], *theTrans, vec, rigidEnd[0], rigidEnd[1]);
+
+	return new AIDMBeamColumn(iData[0],iData[1], iData[2], *theTrans, vec, rigidEnd[0], rigidEnd[1]);
 }
 
-AIDMBeamColumn::AIDMBeamColumn(int tag, double A, double E, double G,
-	double Jx, double Iy, double Iz,
-	int Nd1, int Nd2, CrdTransf& theTransf, const std::vector<int> tag_vec, const double& rigidILength, const double& rigidJLength)
+AIDMBeamColumn::AIDMBeamColumn(int tag, int Nd1, int Nd2, 
+	CrdTransf& theTransf, const std::vector<int> tag_vec, const double& rigidILength, const double& rigidJLength)
 	:Element(tag, ELE_TAG_AIDMBeamColumn),
-	A(A), E(E), G(G), Jx(Jx), Iy(Iy), Iz(Iz),
 	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0),
-	numAIDMs(tag_vec.size()), isGravityConst(false), CLoadFactor(0.0), TLoadFactor(0.0), isInitial(false)
+	isGravityConst(false), CLoadFactor(0.0), TLoadFactor(0.0), isInitial(false),
+	sectionI_tag_(-1), sectionJ_tag_(-1)
 {
 	// allocate memory for numMaterials1d uniaxial material models
-	AIDMs = new AIDMMaterial * [numAIDMs];
-	iAIDMTag = tag_vec[0]; jAIDMTag = tag_vec[1];
-
+	this->sectionI_tag_ = tag_vec[0]; this->sectionJ_tag_ = tag_vec[1];
+	//设定单元基本参数
 	this->initialAIDMBeamColumn(Nd1, Nd2, theTransf, rigidILength, rigidJLength);
-
-	// get a copy of the material objects and check we obtained a valid copy
-	for (int i = 0; i < numAIDMs; i++) {
-		if (tag_vec[i] < 0)
+	//获得截面指针
+	auto sectionI = OPS_getUniaxialMaterial(tag_vec[0]);
+	auto sectionJ = OPS_getUniaxialMaterial(tag_vec[1]);
+	//判断指针类型
+	if (sectionI != 0)
+	{
+		if (sectionI->getClassTag() != SEC_TAG_PMMSection)
 		{
-			AIDMs[i] = new AIDMMaterial();
+			opserr << "WARNING Section " << sectionI->getTag() <<
+				"is not PMMSection - element AIDMBeamColumn\n";
+			this->sectionI_ptr = new PMMSection();
 		}
 		else
 		{
-			AIDMs[i] = dynamic_cast<AIDMMaterial*>(OPS_getUniaxialMaterial(tag_vec[i])->getCopy());
-			if (AIDMs[i] == 0)
-			{
-				opserr << "WARNING no material " << tag_vec[i] <<
-					"exitsts - element AIDMBeamColumn\n";
-				exit(-1);
-			}
+			this->sectionI_ptr = dynamic_cast<PMMSection*>(sectionI->getCopy());
+			this->sectionI_tag_ = tag_vec[0];
 		}
 	}
-
+	else this->sectionI_ptr = new PMMSection();
+	if (sectionJ != 0)
+	{
+		if (sectionJ->getClassTag() != SEC_TAG_PMMSection)
+		{
+			opserr << "WARNING PMMSection " << sectionJ->getTag() <<
+				"is not PMMSection - element AIDMBeamColumn\n";
+			this->sectionJ_ptr = new PMMSection();
+		}
+		else
+		{
+			this->sectionJ_ptr = dynamic_cast<PMMSection*>(sectionJ->getCopy());
+			this->sectionJ_tag_ = tag_vec[1];
+		}
+	}
+	else this->sectionJ_ptr = new PMMSection();
 }
 
 AIDMBeamColumn::AIDMBeamColumn()
 	:Element(0, ELE_TAG_AIDMBeamColumn),
-	A(A), E(E), G(G), Jx(Jx), Iy(Iy), Iz(Iz),
 	Q(12), q(6), connectedExternalNodes(2), theCoordTransf(0),
-	numAIDMs(0), iAIDMTag(0), jAIDMTag(0), isGravityConst(false), CLoadFactor(0.0), TLoadFactor(0.0), isInitial(false)
+	isGravityConst(false), CLoadFactor(0.0), TLoadFactor(0.0), isInitial(false),
+	sectionI_tag_(-1), sectionJ_tag_(-1)
 {
 	// does nothing
 	q0[0] = 0.0;
@@ -350,7 +266,8 @@ AIDMBeamColumn::~AIDMBeamColumn()
 		delete theCoordTransf;
 }
 
-void AIDMBeamColumn::initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTransf, const double& rigidILength, const double& rigidJLength)
+void AIDMBeamColumn::initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTransf, 
+	const double& rigidILength, const double& rigidJLength)
 {
 	connectedExternalNodes(0) = Nd1;
 	connectedExternalNodes(1) = Nd2;
@@ -392,22 +309,22 @@ void AIDMBeamColumn::initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTrans
 	OPS_GetNodeCrd(nodeID, size, nodeCrdI);
 	nodeID[0] = Nd2;
 	OPS_GetNodeCrd(nodeID, size, nodeCrdJ);
-	//Calculate initial Length
-	this->initialLength = sqrt(pow(nodeCrdJ[0] - nodeCrdI[0], 2) + pow(nodeCrdJ[1] - nodeCrdI[1], 2) +
+	//Calculate initial Length 计算构件长度
+	auto initialLength = sqrt(pow(nodeCrdJ[0] - nodeCrdI[0], 2) + pow(nodeCrdJ[1] - nodeCrdI[1], 2) +
 		pow(nodeCrdJ[2] - nodeCrdI[2], 2));
-	//is End beyond
-	if (rigidILength + rigidJLength >= this->initialLength * 0.9)
+	//is End beyond 刚域长度过大
+	if (rigidILength + rigidJLength >= initialLength * 0.9)
 	{
 		opserr << "AIDMBeamColumn::AIDMBeamColumn -- failed to create rigid end: length is out of range.\n";
 		return;
 	}
-	//Calculate vector direction
+	//Calculate vector direction 计算单元向量
 	for(int i = 0; i < 3 ; i++)
 		direction[i] = nodeCrdJ[i] - nodeCrdI[i];
 	//I end 
 	if (rigidILength > 0)
 	{
-		auto factor = rigidILength / this->initialLength;
+		auto factor = rigidILength / initialLength;
 		Vector jntOffset(3);
 		for (int i = 0; i < 3; i++)
 			jntOffset(i) = direction[i] * factor;
@@ -415,20 +332,12 @@ void AIDMBeamColumn::initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTrans
 	}
 	if (rigidJLength > 0)
 	{
-		auto factor = -rigidJLength / this->initialLength;
+		auto factor = -rigidJLength / initialLength;
 		Vector jntOffset(3);
 		for (int i = 0; i < 3; i++)
 			jntOffset(i) = direction[i] * factor;
 		this->theCoordTransf->setnodeOffset(jntOffset, false);
 	}
-}
-
-void AIDMBeamColumn::setRigidEnd(const double& rigidLength, bool isI, double* direction)
-{
-	auto factor = (isI ? rigidLength : -rigidLength) / this->initialLength;
-	Vector jntOffset(3);
-	for (int i = 0; i < 3; i++)
-		jntOffset(i) = direction[i] * factor;
 }
 
 #pragma region Constant
@@ -667,12 +576,6 @@ AIDMBeamColumn::Print(OPS_Stream& s, int flag)
 		s << "\"name\": " << this->getTag() << ", ";
 		s << "\"type\": \"ElasticBeam3d\", ";
 		s << "\"nodes\": [" << connectedExternalNodes(0) << ", " << connectedExternalNodes(1) << "], ";
-		s << "\"E\": " << E << ", ";
-		s << "\"G\": " << G << ", ";
-		s << "\"A\": " << A << ", ";
-		s << "\"Jx\": " << Jx << ", ";
-		s << "\"Iy\": " << Iy << ", ";
-		s << "\"Iz\": " << Iz << ", ";
 		s << "\"crdTransformation\": \"" << theCoordTransf->getTag() << "\"}";
 	}
 }
@@ -799,7 +702,7 @@ int AIDMBeamColumn::addPointLoad(const double& N, const double& Py, const double
 	double M1 = 0;
 	double M2 = 0;
 
-	if (iAIDMTag != -1 && jAIDMTag != -1) {
+	if (sectionI_tag_ != -1 && sectionJ_tag_ != -1) {
 		M1 = -a * b2 * Py * L2;
 		M2 = a2 * b * Py * L2;
 		q0[1] += M1;
@@ -809,13 +712,13 @@ int AIDMBeamColumn::addPointLoad(const double& N, const double& Py, const double
 		q0[3] -= M1;
 		q0[4] -= M2;
 	}
-	else if (jAIDMTag != -1) {
+	else if (sectionJ_tag_ != -1) {
 		M2 = 0.5 * Py * a * b * L2 * (a + L);
 		q0[2] += M2;
 		M2 = 0.5 * Pz * a * b * L2 * (a + L);
 		q0[4] -= M2;
 	}
-	else if (iAIDMTag != -1) {
+	else if (sectionI_tag_ != -1) {
 		M1 = -0.5 * Py * a * b * L2 * (b + L);
 		q0[1] += M1;
 		M1 = -0.5 * Pz * a * b * L2 * (b + L);
@@ -877,19 +780,19 @@ AIDMBeamColumn::addLoad(ElementalLoad* theLoad, double loadFactor)
 		// Fixed end forces in basic system
 		q0[0] -= 0.5 * P;
 
-		if (iAIDMTag != -1 && jAIDMTag != -1)
+		if (sectionI_tag_ != -1 && sectionJ_tag_ != -1)
 		{
 			q0[1] -= Mz;
 			q0[2] += Mz;
 			q0[3] += My;
 			q0[4] -= My;
 		}
-		else if (jAIDMTag != -1)
+		else if (sectionJ_tag_ != -1)
 		{
 			q0[2] += wy * L * L / 8;
 			q0[4] -= wz * L * L / 8;
 		}
-		else if (iAIDMTag != -1)
+		else if (sectionI_tag_ != -1)
 		{
 			q0[1] -= wy * L * L / 8;
 			q0[3] += wz * L * L / 8;
@@ -1021,6 +924,8 @@ AIDMBeamColumn::commitState()
 	//Calculate Shear Span
 	this->sectionI_ptr->setLammda(F, true);
 	this->sectionJ_ptr->setLammda(F, false);
+	this->sectionI_ptr->setCapacity(F, true);
+	this->sectionJ_ptr->setCapacity(F, false);
 	int retVal = 0;
 	// call element commitState to do any base class stuff
 	if ((retVal = this->Element::commitState()) != 0) {
@@ -1051,19 +956,23 @@ int
 AIDMBeamColumn::revertToLastCommit()
 {
 	int retVal = theCoordTransf->revertToLastCommit();
-	//AIDM CommitState
-	for (int i = 0; i < numAIDMs; i++)
-	{
-		retVal += AIDMs[i]->revertToLastCommit();
-	}
+	retVal += this->sectionI_ptr->revertToLastCommit();
+	retVal += this->sectionJ_ptr->revertToLastCommit();
 	return retVal;
 }
 
 int
 AIDMBeamColumn::revertToStart()
 {
-	return theCoordTransf->revertToStart();
-}
+	int retVal = this->theCoordTransf->revertToStart();
+	retVal += this->sectionI_ptr->revertToStart();
+	retVal += this->sectionJ_ptr->revertToStart();
+	this->isInitial = false;
+	this->isGravityConst = false;
+	this->CLoadFactor = 0.0;
+	this->TLoadFactor = 0.0;
+	return retVal;
+} 
 
 int
 AIDMBeamColumn::update(void)
@@ -1100,7 +1009,7 @@ AIDMBeamColumn::getTangentStiff(void)
 	double L = theCoordTransf->getInitialLength();
 
 	//设定刚度
-	setStiffMatrix(L);
+	setStiffMatrix(L, false);
 	//设定局部力
 	setBasicForce(L, v);
 
@@ -1114,7 +1023,7 @@ AIDMBeamColumn::getInitialStiff(void)
 
 	double L = theCoordTransf->getInitialLength();
 	//设定刚度
-	setStiffMatrix(L);
+	setStiffMatrix(L, true);
 	return theCoordTransf->getInitialGlobalStiffMatrix(kb);
 }
 
@@ -1250,25 +1159,14 @@ AIDMBeamColumn::setResponse(const char** argv, int argc, OPS_Stream& output)
 	else if (strcmp(argv[0], "strainStress") == 0 || strcmp(argv[0], "strainstress") == 0 ||
 		strcmp(argv[0], "StrainStress") == 0) 
 	{
-		for (int i = 0; i < this->numAIDMs; i++)
-		{
-			std::stringstream ss_strain;
-			ss_strain << "strain" << i;
-			output.tag("ResponseType", ss_strain.str().c_str());
-		}
-		for (int i = 0; i < this->numAIDMs; i++)
-		{
-			std::stringstream ss_stress;
-			ss_stress << "stress" << i;
-			output.tag("ResponseType", ss_stress.str().c_str());
-		}
-		for (int i = 0; i < this->numAIDMs; i++)
-		{
-			std::stringstream ss_stress;
-			ss_stress << "lammda" << i;
-			output.tag("ResponseType", ss_stress.str().c_str());
-		}
-		theResponse = new ElementResponse(this, 6, Vector(this->numAIDMs * 3));
+		//获得描述
+		auto i_str_vec = this->sectionI_ptr->getResponseStrVec(true);
+		auto j_str_vec = this->sectionJ_ptr->getResponseStrVec(false);
+		//遍历
+		for(auto& str : i_str_vec) output.tag("ResponseType", str.c_str());
+		for (auto& str : j_str_vec) output.tag("ResponseType", str.c_str());
+		//构造
+		theResponse = new ElementResponse(this, 6, Vector(i_str_vec.size() + j_str_vec.size()));
 	}
 	output.endTag(); // ElementOutput
 
@@ -1280,19 +1178,7 @@ AIDMBeamColumn::getResponse(int responseID, Information& eleInfo)
 {
 	static Vector Res(12);
 	Res = this->getResistingForce();
-	static Vector strainStress(this->numAIDMs * 3);
-	for (int i = 0; i < this->numAIDMs; i++)
-	{
-		strainStress(i) = this->AIDMs[i]->getStrain();
-	}
-	for (int i = 0; i < this->numAIDMs; i++)
-	{
-		strainStress(i + this->numAIDMs) = this->AIDMs[i]->getStress();
-	}
-	for (int i = 0; i < this->numAIDMs; i++)
-	{
-		strainStress(i + this->numAIDMs * 2) = this->AIDMs[i]->getLammda();
-	}
+
 	switch (responseID) {
 	case 1: // stiffness
 		return eleInfo.setMatrix(this->getTangentStiff());
@@ -1310,7 +1196,24 @@ AIDMBeamColumn::getResponse(int responseID, Information& eleInfo)
 		return eleInfo.setVector(theCoordTransf->getBasicTrialDisp());
 
 	case 6:
+	{
+		auto i_vec = this->sectionI_ptr->getResponseVec();
+		auto j_vec = this->sectionJ_ptr->getResponseVec();
+		static Vector strainStress(6);
+		int i = 0;
+		for (auto& var : i_vec)
+		{
+			strainStress(i) = var;
+			i++;
+		}
+		for (auto& var : j_vec)
+		{
+			strainStress(i) = var;
+			i++;
+		}
 		return eleInfo.setVector(strainStress);
+	}
+		
 
 	default:
 		return -1;

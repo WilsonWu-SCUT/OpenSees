@@ -10,6 +10,7 @@
 
 
 class AIDMMaterial;
+class Response;
 
 namespace AutoMesh
 {
@@ -27,12 +28,10 @@ class PMMSection: public SectionForceDeformation
 {
 public:
 	PMMSection();
-	PMMSection(const int& tag, const int& AIDMTag_3, const int& AIDMTag_2,
-		const int& section_type, 
-		const std::vector<double> dimension_vec,
-		const std::vector<int> As_vec, bool is_beam,
-		const int& fcu, const double& bar_fy, const double& steel_fy,
-		AutoMesh::SectionType matType);
+	PMMSection(const int& tag, const int& section_type, 
+		const std::vector<double> dimension_vec, const std::vector<int> As_vec, 
+		bool is_beam, const int& fcu, const double& bar_fy, const double& steel_fy,
+		AutoMesh::SectionType matType, const double& lammdaSV_y, const double& lammdaSV_z);
 	PMMSection(const int& tag, const int& section_type,
 		const std::vector<double> dimension_vec, AutoMesh::SectionType matType);
 	PMMSection(const int& tag);
@@ -58,9 +57,10 @@ private:
 	double G(void) const;
 
 private:
-	//纤维截面初始哈市
+	//纤维截面初始化
 	bool iniSection(const int& section_type, const std::vector<double> dimension_vec,
-		AutoMesh::SectionType& matType, const int& fcu, const double& steel_fy);
+		AutoMesh::SectionType& matType, 
+		const int& fcu, const double& bar_fy, const double& steel_fy, bool isbeam);
 
 public:
 	//设定初始刚度
@@ -73,6 +73,9 @@ public:
 	bool checkCapacity(const Vector& force_vec, const int& eleTag, bool is_I);
 	//设定变形
 	int setTrialDeformation(const Vector& deformation_vec, bool is_I);
+	//获得Response类型描述
+	std::vector<std::string> getResponseStrVec(bool is_I);
+	std::vector<double> getResponseVec();
 
 public:
 	const Vector& getSectionDeformation(void);
@@ -92,14 +95,15 @@ public:
 	int recvSelf(int commitTag, Channel& theChannel, FEM_ObjectBroker& theBroker);
 	void Print(OPS_Stream& s, int flag);
 
+private:
+	double get_fck(const double& fcu) const;
+	double get_ftk(const double& fcu) const;
 
 private:
 	//防止承载力发生显著退化（相对于无轴力下的弯矩）
 	double min_capacity_factor = 0.2;
 	//是否考虑双偏压
 	bool consider_double_bending = true;
-	//是否硬化初始刚度
-	bool ensureIniK = true;
 
 private:
 	//Section Analysis
@@ -107,9 +111,7 @@ private:
 	//截面信息
 	std::shared_ptr<AutoMesh::FRAMSection> FRAMSection_sp_;
 
-	//AIDM材料指针编号
-	int AIDMTag_2_;
-	int AIDMTag_3_;
+private:
 	//AIDM材料指针 绕3轴
 	AIDMMaterial* AIDM_3_ptr;
 	//AIDM材料指针 绕2轴
@@ -122,9 +124,13 @@ private:
 	double capacity_3neg_ini_;
 	double capacity_2pos_ini_;
 	double capacity_2neg_ini_;
-	//初始刚度
-	double initial_K3_;
-	double initial_K2_;
+	
+private:
+	/*强度*/
+	int fcu_;
+	double steel_fy_;
+	/*配筋*/
+	std::vector<int> as_vec_;
 
 private:
 	static Vector s;

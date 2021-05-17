@@ -3,6 +3,7 @@
 namespace AutoMesh
 {
 	class MeshCpp;
+	enum class MatType;
 }
 
 namespace SectionAnalysis
@@ -11,6 +12,7 @@ namespace SectionAnalysis
 	class FiberSet;
 	class MomentAxialLoad;
 	class MomentAxialLoadSet;
+	
 
 	#define PM_DENSE_NUM 5
 	#define SUB_MESH_AIXIAL_LOAD_TOL 0.3
@@ -59,6 +61,7 @@ namespace SectionAnalysis
 		double Iy(void) const;
 		double Iz(void) const;
 		double E(void)const;
+		double A(const AutoMesh::MatType& mat_type);
 
 	private:
 		//≥ı ºœÀŒ¨Ωÿ√Ê

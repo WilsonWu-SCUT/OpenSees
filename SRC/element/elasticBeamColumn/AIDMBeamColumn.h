@@ -51,12 +51,8 @@ class AIDMBeamColumn : public Element
 {
   public:
     AIDMBeamColumn();
-    AIDMBeamColumn(int tag, double A, double E, double G,
-        double Jx, double Iy, double Iz,
-        int Nd1, int Nd2, CrdTransf& theTransf, const std::vector<int> tag_vec, const double& rigidILength, const double& rigidJLength);
     AIDMBeamColumn(int tag, int Nd1, int Nd2, CrdTransf& theTransf, 
-        const std::vector<int> tag_vec,
-        const double& rigidILength, const double& rigidJLength);
+        const std::vector<int> tag_vec, const double& rigidILength, const double& rigidJLength);
     ~AIDMBeamColumn();
 
     const char *getClassType(void) const {return "AIDMBeamColumn";};
@@ -100,10 +96,8 @@ class AIDMBeamColumn : public Element
 private:
     /*AIDMBeamColumn初始化*/
     void initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTransf, const double& rigidILength, const double& rigidJLength);
-    /*设定刚域*/
-    void setRigidEnd(const double& rigidLength, bool isI, double* direction);
     /*设定刚度矩阵*/
-	void setStiffMatrix(const double& length);
+	void setStiffMatrix(const double& length, bool is_initial);
 	void setBasicForce(const double& length, const Vector& v);
     /*添加节点荷载*/
 	int addPointLoad(const double& N, const double& Py, const double& Pz,
@@ -114,18 +108,12 @@ private:
 		const double& aOverL, const double& bOverL, const double& length);
 
   private:
-      /*AIDM编号*/
-      int iAIDMTag;
-      int jAIDMTag;
       /*通过恒在判断是否转化为弹性*/
       bool isGravityConst;
       double TLoadFactor;
       double CLoadFactor;
-
       /*是否初始化*/
       bool isInitial;
-      /*初始化长度*/
-      double initialLength;
 
 private:
     PMMSection* sectionI_ptr;
@@ -134,12 +122,6 @@ private:
     int sectionJ_tag_;
 
   private:
-    double A,E,G,Jx,Iy,Iz;
-
-    /*AIDM材料指针*/
-    AIDMMaterial** AIDMs;
-    int numAIDMs;
-
     static Matrix K;
     static Vector P;
     Vector Q;

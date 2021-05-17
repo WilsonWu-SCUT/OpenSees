@@ -46,52 +46,8 @@
 void *
 OPS_AIDMMaterial(void)
 {
-
-#ifdef _SAP
+    opserr << "ERROR AIDMMaterial NOT AVAILABLE! \n";
     return nullptr;
-#else
-	// Pointer to a uniaxial material that will be returned
-	UniaxialMaterial* theMaterial = 0;
-
-	if (OPS_GetNumRemainingInputArgs() < 2) {
-		opserr << "Invalid #args,  want: uniaxialMaterial Elastic tag? E? <eta?> <Eneg?> ... " << endln;
-		return 0;
-	}
-
-	int iData[1];
-	double dData[7];
-	int numData = 1;
-	if (OPS_GetIntInput(&numData, iData) != 0) {
-		opserr << "WARNING invalid tag for uniaxialMaterial Elastic" << endln;
-		return 0;
-	}
-
-	numData = OPS_GetNumRemainingInputArgs();
-
-	if (numData >= 7) {
-		numData = 7;
-		if (OPS_GetDoubleInput(&numData, dData) != 0) {
-			opserr << "Invalid data for uniaxial Elastic " << iData[0] << endln;
-			return 0;
-		}
-	}
-	else {
-        numData = 6;
-        if (OPS_GetDoubleInput(&numData, dData) != 0) {
-            opserr << "Invalid data for uniaxial Elastic " << iData[0] << endln;
-            return 0;
-        }
-	}
-    if(numData == 7)
-        theMaterial = new AIDMMaterial(iData[0], dData[0], dData[1], dData[2], dData[3], dData[4], dData[5], dData[6]);
-	// Parsing was successful, allocate the material
-	else theMaterial = new AIDMMaterial(iData[0], dData[0], dData[1], dData[2], dData[3], dData[4], dData[5]);
-	if (theMaterial == 0) {
-		opserr << "WARNING could not create uniaxialMaterial of type ElasticMaterial\n";
-		return 0;
-	}
-	return theMaterial;
-#endif // SAP
 }
 
 std::shared_ptr<KerasModel> AIDMMaterial::keras_SANN_sp(new KerasModel("AIDMBB.model"));
@@ -112,41 +68,20 @@ std::vector<double> AIDMMaterial::gamma_vec = { 0, 1, 1 };
 std::vector<double> AIDMMaterial::eta_vec = { 0, 1, 6 };
 int AIDMMaterial::predict_num = 0;
 
-AIDMMaterial::AIDMMaterial(int tag, double height, double width, double lammdaS, double lammdaSV, double lammdaT_pos, 
-    double Msa_pos, double Msa_neg)
-:UniaxialMaterial(tag, MAT_TAG_AIDMMaterial),
-TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
+AIDMMaterial::AIDMMaterial(const double& lammdaSV)
+:TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
 K(0), CK(0.0),
-stressSA_pos(Msa_pos), stressSA_neg(Msa_neg),
 CstrainMax(0), CstrainMin(0),
-lammda(initialLammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
+lammda(initialLammda), lammdaS(0), lammdaSV(lammdaSV), lammdaT_pos(0),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
 afa_pos(0.0), afa_neg(0.0), isConstant(false),TLoadingDirectPos(true), mnFactor(1)
 {
-    this->updateSkeletonParams();
-}
-
-
-AIDMMaterial::AIDMMaterial(int tag, double lammda, double lammdaS, double lammdaSV, double lammdaT_pos, 
-    double Msa_pos, double Msa_neg)
-    :UniaxialMaterial(tag, MAT_TAG_AIDMMaterial),
-    TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
-    K(0), CK(0.0),
-    stressSA_pos(Msa_pos), stressSA_neg(Msa_neg),
-    CstrainMax(0), CstrainMin(0),
-    lammda(lammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
-    needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
-    afa_pos(0.0), afa_neg(0.0), isConstant(false), TLoadingDirectPos(true), mnFactor(1)
-{
-    this->updateSkeletonParams();
 }
 
 
 AIDMMaterial::AIDMMaterial()
-:UniaxialMaterial(0, MAT_TAG_AIDMMaterial),
-TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
+:TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
 K(0), CK(0.0),
-stressSA_pos(0.0), stressSA_neg(0.0),
 CstrainMax(0), CstrainMin(0),
 lammda(initialLammda), lammdaS(0.0), lammdaSV(0.0), lammdaT_pos(0.0),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
@@ -431,7 +366,7 @@ std::vector<float> AIDMMaterial::getComponentParamsVec(bool is_pos)
 void AIDMMaterial::updateSkeletonParams()
 {
     //Upadte Backbone curves
-    if (!needUpdateBANN) return;
+    if (!this->isAvailabelAIDM() || !needUpdateBANN) return;
     //Input params
     auto& componentParamvec_pos = this->getComponentParamsVec(true);
     auto& componentParamvec_neg = this->getComponentParamsVec(false);
@@ -454,6 +389,7 @@ void AIDMMaterial::updateSkeletonParams()
 void AIDMMaterial::updateHystereticParams(bool is_pos)
 {
     //Try to update skeleton
+    if (!this->isAvailabelAIDM()) return;
     this->updateSkeletonParams();
     //is need to update
     if ((is_pos ? !needUpdateHANN_pos : !needUpdateHANN_neg))
@@ -522,6 +458,7 @@ AIDMMaterial::getTangent(void)
 double 
 AIDMMaterial::getInitialTangent(void)
 {
+    if (!this->isAvailabelAIDM()) return this->K;
     auto pos_dStrain = this->backbone_inidStrainFactor * strainC_pos;
     auto neg_dStrain = this->backbone_inidStrainFactor * strainC_neg;
     auto K0_pos = this->getStressOnBackbone(pos_dStrain) / pos_dStrain;
@@ -539,7 +476,6 @@ AIDMMaterial::commitState(void)
     CStrain = TStrain;
     CStress = TStress;
     CK = K;
-    Clammda = lammda;
     CLoadingDirectPos = TLoadingDirectPos;
     //Need to kill 判断是否为无效单元或单元已被杀死
     if (this->isConstant || !this->isAvailabelAIDM()) return 0;
@@ -559,11 +495,7 @@ AIDMMaterial::commitState(void)
         //承载力低于限值要求
         bool isCapacitybelow = abs(CstressMaxFactor) < this->killStressFactor;
         // 处于软化段 承载力低于限值要求 承载力在退化过程 （为何不通过负刚度做判断）
-        if (isSoften && isPost && isCapacitybelow)
-        {
-            this->isConstant = true;
-            this->K = 0;
-        }
+        if (isSoften && isPost && isCapacitybelow) this->Kill();
     }
     else
     {
@@ -580,11 +512,7 @@ AIDMMaterial::commitState(void)
         //承载力低于限值要求
         bool isCapacitybelow = abs(CstressMinFactor) < this->killStressFactor;
         // 处于软化段 承载力低于限值要求 承载力在退化过程 （为何不通过负刚度做判断）
-        if (isSoften && isPost && isCapacitybelow)
-        {
-            this->isConstant = true;
-            this->K = 0;
-        }
+        if (isSoften && isPost && isCapacitybelow) this->Kill();
     }
     return 0;
 }
@@ -597,7 +525,6 @@ AIDMMaterial::revertToLastCommit(void)
     this->TStrain = CStrain;
     this->TStress = CStress;
     this->K = CK;
-    this->lammda = Clammda;
     this->TLoadingDirectPos = CLoadingDirectPos;
     this->needUpdateBANN = true;
     this->needUpdateHANN_neg = true;
@@ -612,14 +539,20 @@ AIDMMaterial::revertToStart(void)
     this->TStrain = 0.0;
     this->TStress = 0.0;
     this->K = 0.0;
+
     this->lammda = this->initialLammda;
+    this->axialRatio = 0;
+
     this->needUpdateBANN = true;
     this->needUpdateHANN_neg = false;
     this->needUpdateHANN_pos = false;
     this->isConstant = false;
-    this->mnFactor = 1;
     this->TLoadingDirectPos = true;
-    /*待补充*/
+  
+    this->mnFactor = 1;
+    this->CstrainMax = 0;   this->CstrainMin = 0;
+    this->CstressMaxFactor = 0;   this->CstressMinFactor = 0;
+
     return 0;
 }
 
@@ -627,15 +560,8 @@ AIDMMaterial::revertToStart(void)
 UniaxialMaterial *
 AIDMMaterial::getCopy(void)
 {
-    AIDMMaterial*theCopy = new AIDMMaterial(this->getTag(), 
-        lammda, lammdaS, lammdaSV, lammdaT_pos, stressSA_pos, stressSA_neg);
-    theCopy->TStrain = TStrain;
-    theCopy->CStress = CStress;
-    theCopy->CStrain = CStrain;
-    theCopy->TStress = TStress;
-    theCopy->CK = CK;
-    theCopy->Clammda = Clammda;
-    return theCopy;
+    opserr << "Error: AIDMMaterial do not provide copy method." << endln;
+    return nullptr;
 }
 
 #pragma region NoDefine
@@ -693,7 +619,19 @@ void AIDMMaterial::setLammda(const double& Lammda)
     }
 }
 
-bool AIDMMaterial::checkCapacity(const double& Moment, const int& eleTag)
+void AIDMMaterial::setCapcacity(const double& m_pos, const double& m_neg, const double& axialRatio)
+{
+    auto target_AR = axialRatio < -1 ? -1 : axialRatio;
+    target_AR = target_AR > 5 ? 5 : target_AR;
+    if (abs(this->axialRatio - target_AR) > 0.05)
+    {
+        this->axialRatio = target_AR;
+        this->stressSA_pos = m_pos;
+        this->stressSA_neg = m_neg;
+    }
+}
+
+bool AIDMMaterial::checkCapacity(const double& Moment)
 {
     /*非有效的AIDM对象*/
     if (!this->isAvailabelAIDM()) return true;
@@ -704,9 +642,6 @@ bool AIDMMaterial::checkCapacity(const double& Moment, const int& eleTag)
          this->stressSA_pos * this->stressFactor_pos;
     /*承载力满足需求*/
      if (abs(Moment) < capacity * limitFactor)  return true;
-     //将构件转化为弹性
-     opserr << "Warinning: the capacity of AIDMBeamColumn " << eleTag << " with AIDMMaterial " << this->getTag() <<
-         " is too weak: convert to elastic automatically."<< endln;
      //刚度转为弹性 刚度为割线刚度 
      this->isConstant = true;
      K = this->CStress / this->CStrain;
@@ -739,7 +674,13 @@ double AIDMMaterial::getStressOnBackbone(const double& drift)
 void AIDMMaterial::setInitialK(const double iniK)
 {
     //是否为有效单元
-    if (!this->isAvailabelAIDM()) return;
+    if (!this->isAvailabelAIDM())
+    {
+        this->isConstant = true;
+        this->K = iniK; return;
+    }
+    //不需要硬化单元
+    if (!this->ensureIniK) return;
     /*初始化调整系数*/
     this->mnFactor = 0;
     /*用于计算初始刚度的应变*/
@@ -768,4 +709,21 @@ bool AIDMMaterial::isAvailabelAIDM() const
     if (this->lammdaS == 0 || this->lammdaSV == 0 || this->lammdaT_pos == 0)
         return false;
     return true;
+}
+
+bool AIDMMaterial::isKill() const
+{
+    //是否为有效的AIDM
+    if (!this->isAvailabelAIDM()) return false;
+    //常刚度 且刚度为零
+    return (this->isConstant && this->K == 0);
+}
+
+void AIDMMaterial::Kill()
+{
+    //是否为有效的AIDM
+    if (!this->isAvailabelAIDM()) return;
+    //常刚度 且刚度为零
+    this->isConstant = true;
+    this->K = 0;
 }

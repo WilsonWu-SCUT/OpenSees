@@ -39,7 +39,7 @@
 #include <UniaxialMaterial.h>
 #include "KerasModelExport.h"
 
-class AIDMMaterial : public UniaxialMaterial
+class AIDMMaterial //: public UniaxialMaterial
 {
   private:
       enum class AIDMParamEnum
@@ -63,9 +63,8 @@ class AIDMMaterial : public UniaxialMaterial
       };
 
   public:
-      AIDMMaterial(int tag, double height, double width, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg);
-      AIDMMaterial(int tag, double lammda, double lammdaS, double lammdaSV, double lammdaT_pos, double Msa_pos, double Msa_neg);
-      AIDMMaterial();
+    AIDMMaterial(const double& lammdaSV);
+    AIDMMaterial();
     ~AIDMMaterial();
 
  public:
@@ -92,7 +91,9 @@ public:
     int setTrialStrain(double strain, double strainRate = 0.0); 
     int setTrial(double strain, double &stress, double &tangent, double strainRate = 0.0); 
     double getStrain(void) {return TStrain;};
-    double getLammda(void) { return this->Clammda; }
+    double getLammda(void) { return this->lammda; }
+    double getAxialRatio(void) { return this->axialRatio; }
+    double getLammdaSV(void) { return this->lammdaSV; }
     double getStress(void);
     double getTangent(void);
     double getInitialTangent(void);
@@ -116,13 +117,9 @@ public:
     //设定剪跨比
      void setLammda(const double& Lammda);
      //设定承载力
-     inline void setCapcacity(const double& m_pos, const double& m_neg)
-     {
-         this->stressSA_pos = m_pos;
-         this->stressSA_neg = m_neg;
-     };
+     void setCapcacity(const double& m_pos, const double& m_neg, const double& axialRatio);
     //判断承载力是否越界
-    bool checkCapacity(const double& Moment, const int& eleTag);
+    bool checkCapacity(const double& Moment);
     //设定初始刚度
     void setInitialK(const double K);
     //设定纵筋配筋比
@@ -130,8 +127,16 @@ public:
     {
         this->lammdaT_pos = lammdaT;
     }
+    //设定纵筋配筋比
+    inline void setlammdaS(const double& LammdaS)
+    {
+        this->lammdaS = LammdaS;
+    }
     //是否为有效的AIDM对象
     bool isAvailabelAIDM() const;
+    //单元是否已被杀死
+    bool isKill() const;
+    void Kill();
 
   private:
       //从骨架上计算应力
@@ -152,10 +157,12 @@ public:
       float getNormalValue(const double& value, const AIDMParamEnum& type);
       //输入层的构件特征参数
       std::vector<float> getComponentParamsVec(bool is_pos);
-      //更新骨架参数
-      void updateSkeletonParams();
       //更新滞回参数
       void updateHystereticParams(bool is_pos);
+
+      public:
+          //更新骨架参数
+          void updateSkeletonParams();
 
   private:
       //骨架曲线指向点应变系数
@@ -166,12 +173,14 @@ public:
       double initialLammda = 4;
       //杀死单元的应力系数
       double killStressFactor = 0.2;
-     
+      //是否硬化初始刚度
+      bool ensureIniK = true;
 
   private: /*力学参数*/
       //剪跨比（需要revert）
       double lammda;
-      double Clammda;
+      //轴压比
+      double axialRatio;
       //Caping Capacity based on section Analysis positve value
       //峰值承载力
       double stressSA_pos;
@@ -180,14 +189,12 @@ public:
       int mnFactor;
 
   private: /*基本参数*/
-      //纵筋配筋特征值
-      double lammdaS;
       //面积配箍特征值
       double lammdaSV;
-
-      //受拉纵筋与受压纵筋比
-      //通过PMMSection计算
-      double lammdaT_pos;
+      //受拉纵筋与受压纵筋比（通过PMMSection计算）
+      double lammdaT_pos; 
+      //纵筋配筋特征值（通过PMMSection计算）
+      double lammdaS;
 
     #pragma region AIDM参数
   private:   /*是否更新本构参数*/
