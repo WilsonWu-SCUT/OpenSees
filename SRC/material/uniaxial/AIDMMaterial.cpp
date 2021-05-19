@@ -68,24 +68,28 @@ std::vector<double> AIDMMaterial::gamma_vec = { 0, 1, 1 };
 std::vector<double> AIDMMaterial::eta_vec = { 0, 1, 6 };
 int AIDMMaterial::predict_num = 0;
 
-AIDMMaterial::AIDMMaterial(const double& lammdaSV)
-:TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
+AIDMMaterial::AIDMMaterial(const int& tag, const double& lammdaSV, const double& lammdaS, const double& lammdaT_pos)
+:UniaxialMaterial(tag, MAT_TAG_AIDMMaterial),
+TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
 K(0), CK(0.0),
 CstrainMax(0), CstrainMin(0),
-lammda(initialLammda), lammdaS(0), lammdaSV(lammdaSV), lammdaT_pos(0),
+lammda(initialLammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
-afa_pos(0.0), afa_neg(0.0), isConstant(false),TLoadingDirectPos(true), mnFactor(1)
+afa_pos(0.0), afa_neg(0.0), isConstant(false),TLoadingDirectPos(true), mnFactor(1),
+stressSA_pos(0), stressSA_neg(0),axialRatio(0)
 {
 }
 
 
 AIDMMaterial::AIDMMaterial()
-:TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
+:UniaxialMaterial(0, MAT_TAG_AIDMMaterial),
+ TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
 K(0), CK(0.0),
 CstrainMax(0), CstrainMin(0),
 lammda(initialLammda), lammdaS(0.0), lammdaSV(0.0), lammdaT_pos(0.0),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
-afa_pos(0.0), afa_neg(0.0), isConstant(false), TLoadingDirectPos(true), mnFactor(1)
+afa_pos(0.0), afa_neg(0.0), isConstant(false), TLoadingDirectPos(true), mnFactor(1),
+stressSA_pos(0), stressSA_neg(0), axialRatio(0)
 {
 
 }
@@ -560,8 +564,8 @@ AIDMMaterial::revertToStart(void)
 UniaxialMaterial *
 AIDMMaterial::getCopy(void)
 {
-    opserr << "Error: AIDMMaterial do not provide copy method." << endln;
-    return nullptr;
+    AIDMMaterial* mat = new AIDMMaterial(this->getTag(), this->lammdaSV, this->lammdaS, this->lammdaT_pos);
+    return mat;
 }
 
 #pragma region NoDefine
@@ -628,6 +632,19 @@ void AIDMMaterial::setCapcacity(const double& m_pos, const double& m_neg, const 
         this->axialRatio = target_AR;
         this->stressSA_pos = m_pos;
         this->stressSA_neg = m_neg;
+    }
+    else if (this->stressSA_pos == 0 || this->stressSA_neg == 0)
+    {
+        this->axialRatio = target_AR;
+        this->stressSA_pos = m_pos;
+        this->stressSA_neg = m_neg;
+    }
+    else
+    {
+        if (std::abs(m_pos - this->stressSA_pos) > 20E6)
+            this->stressSA_pos = m_pos;
+        if (std::abs(m_neg - this->stressSA_neg) > 20E6)
+            this->stressSA_neg = m_neg;
     }
 }
 

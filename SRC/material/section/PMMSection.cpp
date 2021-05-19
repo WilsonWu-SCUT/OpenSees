@@ -11,7 +11,7 @@ using namespace AutoMesh;
 void* OPS_PMMSectionRectBeam()
 {
 	//参数是不是满足
-	if (OPS_GetNumRemainingInputArgs() != 9 || 
+	if (OPS_GetNumRemainingInputArgs() != 9 &&
 		OPS_GetNumRemainingInputArgs() != 3) {
 		opserr << "insufficient arguments for PMMSectionRectBeam\n";
 		return 0;
@@ -27,7 +27,7 @@ void* OPS_PMMSectionRectBeam()
 	//参数容器
 	std::vector<double> dimension_vec;
 	std::vector<int> As_vec = {0};
-	int fcu;
+	double fck;
 	double fy;
 	double lammdaSV_y, lammdaSV_z;
 
@@ -46,12 +46,12 @@ void* OPS_PMMSectionRectBeam()
 		for (auto info : int_data)  As_vec.push_back(info);
 		//材料强度
 		numData = 1;
-		if (OPS_GetIntInput(&numData, &fcu) < 0) return 0;
+		if (OPS_GetDoubleInput(&numData, &fck) < 0) return 0;
 		if (OPS_GetDoubleInput(&numData, &fy) < 0) return 0;
 		if (OPS_GetDoubleInput(&numData, &lammdaSV_y) < 0) return 0;
 		if (OPS_GetDoubleInput(&numData, &lammdaSV_z) < 0) return 0;
 		return new PMMSection(tag, 1, dimension_vec, As_vec, true,
-			fcu, fy, 345, AutoMesh::SectionType::RC, lammdaSV_y, lammdaSV_z);
+			fck, fy, 345, AutoMesh::SectionType::RC, lammdaSV_y, lammdaSV_z);
 	}
 	else return new PMMSection(tag, 1, dimension_vec, AutoMesh::SectionType::RC);	
 }
@@ -63,14 +63,16 @@ PMMSection::PMMSection()
 	sectionHeight_3_(0), sectionHeight_2_(0),
 	capacity_3pos_ini_(0), capacity_3neg_ini_(0),
 	capacity_2pos_ini_(0), capacity_2neg_ini_(0),
-	fcu_(0), steel_fy_(0)
+	fck_(0), steel_fy_(0)
 {
-
+	//初始化指针
+	this->AIDM_2_ptr = new AIDMMaterial();
+	this->AIDM_3_ptr = new AIDMMaterial();
 }
 
 PMMSection::PMMSection(const int& tag, const int& section_type,
 	const std::vector<double> dimension_vec, const std::vector<int> As_vec,
-	bool is_beam, const int& fcu, const double& bar_fy, const double& steel_fy,
+	bool is_beam, const double& fck, const double& bar_fy, const double& steel_fy,
 	AutoMesh::SectionType matType, const double& lammdaSV_y, const double& lammdaSV_z)
 	: SectionForceDeformation(tag, SEC_TAG_PMMSection),
 	section_sp_(), FRAMSection_sp_(),
@@ -78,14 +80,14 @@ PMMSection::PMMSection(const int& tag, const int& section_type,
 	sectionHeight_3_(0), sectionHeight_2_(0),
 	capacity_3pos_ini_(0), capacity_3neg_ini_(0),
 	capacity_2pos_ini_(0), capacity_2neg_ini_(0),
-	fcu_(fcu), steel_fy_(steel_fy)
+	fck_(fck), steel_fy_(steel_fy)
 {
 	//初始化截面
 	this->as_vec_ = As_vec;
-	if (!this->iniSection(section_type, dimension_vec, matType, fcu, bar_fy, steel_fy, is_beam)) return;
+	if (!this->iniSection(section_type, dimension_vec, matType, bar_fy, is_beam)) return;
 	//计算受拉受压配筋比
 	auto lammdaT_2_pos = 1;
-	auto lammdaT_3_pos = is_beam ? As_vec[2] / As_vec[1] : 1;
+	auto lammdaT_3_pos = this->FRAMSection_sp_->isBeam() ? this->as_vec_[2] / this->as_vec_[1] : 1;
 	//截面分析
 	this->section_sp_->analysis(4);
 	//计算承载力
@@ -95,19 +97,19 @@ PMMSection::PMMSection(const int& tag, const int& section_type,
 	this->capacity_2neg_ini_ = this->section_sp_->get_moment(0, 90) * 1E6;
 	//纵筋配筋特征值
 	auto lammdaS = this->section_sp_->A(AutoMesh::MatType::ReinforceBar) / this->section_sp_->A()
-		* bar_fy / this->get_fck(fcu);
+		* bar_fy / this->fck_;
+	//AIDMTAG
+	int tag2 = tag * 100 + 2;
+	int tag3 = tag * 100 + 3;
 	//创建材料指针
-	this->AIDM_2_ptr = lammdaSV_y <= 0 ? new AIDMMaterial() : new AIDMMaterial(lammdaSV_y);
-	this->AIDM_3_ptr = lammdaSV_z <= 0 ? new AIDMMaterial() : new AIDMMaterial(lammdaSV_z);
+	this->AIDM_2_ptr = lammdaSV_y <= 0 ? new AIDMMaterial() : new AIDMMaterial(tag2, lammdaSV_y, lammdaS, lammdaT_2_pos);
+	this->AIDM_3_ptr = lammdaSV_z <= 0 ? new AIDMMaterial() : new AIDMMaterial(tag3, lammdaSV_z, lammdaS, lammdaT_3_pos);
 	//设定参数
-	this->AIDM_3_ptr->setlammdaT_pos(lammdaT_2_pos);
-	this->AIDM_3_ptr->setlammdaS(lammdaS);
 	this->AIDM_3_ptr->setCapcacity(this->capacity_3pos_ini_, this->capacity_3neg_ini_, 0);
 	this->AIDM_3_ptr->updateSkeletonParams();
-	this->AIDM_2_ptr->setlammdaT_pos(lammdaT_3_pos);
-	this->AIDM_2_ptr->setlammdaS(lammdaS);
 	this->AIDM_2_ptr->setCapcacity(this->capacity_2pos_ini_, this->capacity_2neg_ini_, 0);
 	this->AIDM_2_ptr->updateSkeletonParams();
+	
 }
 
 PMMSection::PMMSection(const int& tag, const int& section_type,
@@ -118,10 +120,10 @@ PMMSection::PMMSection(const int& tag, const int& section_type,
 	sectionHeight_3_(0), sectionHeight_2_(0),
 	capacity_3pos_ini_(0), capacity_3neg_ini_(0),
 	capacity_2pos_ini_(0), capacity_2neg_ini_(0),
-	fcu_(0), steel_fy_(0)
+	fck_(30), steel_fy_(345)
 {
 	//初始化截面
-	if (!this->iniSection(section_type, dimension_vec, matType, 30, 400, 345, true)) return;
+	if (!this->iniSection(section_type, dimension_vec, matType, 400, true)) return;
 	//初始化指针
 	this->AIDM_2_ptr = new AIDMMaterial();
 	this->AIDM_3_ptr = new AIDMMaterial();
@@ -134,8 +136,11 @@ PMMSection::PMMSection(const int& tag)
 	sectionHeight_3_(0), sectionHeight_2_(0),
 	capacity_3pos_ini_(0), capacity_3neg_ini_(0),
 	capacity_2pos_ini_(0), capacity_2neg_ini_(0),
-	fcu_(0), steel_fy_(0)
+	fck_(0), steel_fy_(0)
 {
+	//初始化指针
+	this->AIDM_2_ptr = new AIDMMaterial();
+	this->AIDM_3_ptr = new AIDMMaterial();
 }
 
 PMMSection::~PMMSection()
@@ -145,7 +150,7 @@ PMMSection::~PMMSection()
 }
 
 bool PMMSection::iniSection(const int& section_type, const std::vector<double> dimension_vec,
-	AutoMesh::SectionType& matType, const int& fcu, const double& bar_fy, const double& steel_fy, bool isbeam)
+	AutoMesh::SectionType& matType, const double& bar_fy,bool isbeam)
 {
 	//构造截面
 	this->FRAMSection_sp_.reset(new AutoMesh::FRAMSection(section_type, matType));
@@ -176,7 +181,7 @@ bool PMMSection::iniSection(const int& section_type, const std::vector<double> d
 		return false;
 	}
 	//设定截面参数
-	this->section_sp_.reset(new SectionAnalysis::Section(mesh_ptr, fcu, steel_fy));
+	this->section_sp_.reset(new SectionAnalysis::Section(mesh_ptr, this->fck_, 0.1 * this->fck_, this->steel_fy_));
 	//获得配筋及配筋面积
 	if (this->as_vec_.size() != 0)
 	{
@@ -226,7 +231,7 @@ void PMMSection::setCapacity(const Vector& force_vec, bool is_I)
 	//计算内力
 	auto my = (is_I ? force_vec(4) : force_vec(10) * -1) / 1E6;
 	auto mz = (is_I ? force_vec(5) : force_vec(11) * -1) / 1E6;
-	auto P = (is_I ? force_vec(0) : force_vec(6) * -1) / 1E3;
+	auto P = (is_I ? -1 * force_vec(0) : force_vec(6)) / 1E3;
 	//初始化承载力
 	double myca_pos, myca_neg, mzca_pos, mzca_neg;
 	//计算承载力 单偏压
@@ -257,8 +262,8 @@ void PMMSection::setCapacity(const Vector& force_vec, bool is_I)
 	auto Ac = this->section_sp_->A(AutoMesh::MatType::Concrete) +
 		this->section_sp_->A(AutoMesh::MatType::CoverConcrete);
 	auto fA = this->steel_fy_ * this->section_sp_->A(AutoMesh::MatType::Steel) + Ac * 
-		(P <= 0 ? this->get_fck(this->fcu_): this->get_ftk(this->fcu_));
-	auto axialRatio = fA == 0 ? 0 : P / fA;
+		(P <= 0 ? this->fck_: 0.1 * this->fck_);
+	auto axialRatio = fA == 0 ? 0 : P / fA * 1E3;
 	//设定承载力
 	this->AIDM_3_ptr->setCapcacity(myca_pos, myca_neg, axialRatio);
 	this->AIDM_2_ptr->setCapcacity(mzca_pos, mzca_neg, axialRatio);
@@ -316,12 +321,10 @@ std::vector<double> PMMSection::getResponseVec()
 
 SectionForceDeformation* PMMSection::getCopy(void)
 {
+	//初始化
 	auto section = new PMMSection(this->getTag());
 	section->section_sp_ = this->section_sp_;
 	section->FRAMSection_sp_ = this->FRAMSection_sp_;
-	//重构AIDM指针
-	section->AIDM_2_ptr = new AIDMMaterial(this->AIDM_2_ptr->getLammdaSV());
-	section->AIDM_3_ptr = new AIDMMaterial(this->AIDM_3_ptr->getLammdaSV());
 	//基本变量
 	section->sectionHeight_3_ = this->sectionHeight_3_;
 	section->sectionHeight_2_ = this->sectionHeight_2_;
@@ -330,6 +333,19 @@ SectionForceDeformation* PMMSection::getCopy(void)
 	section->capacity_3neg_ini_ = this->capacity_3neg_ini_;
 	section->capacity_2pos_ini_ = this->capacity_2pos_ini_;
 	section->capacity_2neg_ini_ = this->capacity_2neg_ini_;
+	//配筋
+	section->as_vec_ = this->as_vec_;
+	section->fck_ = this->fck_;
+	section->steel_fy_ = this->steel_fy_;
+
+	//重构AIDM指针
+	section->AIDM_2_ptr = (AIDMMaterial*)this->AIDM_2_ptr->getCopy();
+	section->AIDM_3_ptr = (AIDMMaterial*)this->AIDM_3_ptr->getCopy();
+	section->AIDM_3_ptr->setCapcacity(this->capacity_3pos_ini_, this->capacity_3neg_ini_, 0);
+	section->AIDM_3_ptr->updateSkeletonParams();
+	section->AIDM_2_ptr->setCapcacity(this->capacity_2pos_ini_, this->capacity_2neg_ini_, 0);
+	section->AIDM_2_ptr->updateSkeletonParams();
+
 	return section;
 }
 
@@ -471,75 +487,3 @@ Vector PMMSection::s(2);
 Matrix PMMSection::ks(2, 2);
 
 #pragma endregion
-
-double PMMSection::get_fck(const double& fcu) const
-{
-	//(混规条文说明4.1.3)
-		 //混凝土强度小于C40（标准强度）
-	double afa_1 = 0.0;
-	double afa_2 = 0.0;
-	if (fcu <= 40)
-	{
-		afa_1 = 0.76;
-		afa_2 = 1;
-	}
-	//混凝土强度小于C50（标准强度）
-	else if (fcu <= 50)
-	{
-		afa_1 = 0.76;
-		afa_2 = 1 - (0.13F) / 40 * (fcu - 40);
-	}
-	//混凝土强度小于C80（标准强度）
-	else if (fcu <= 80)
-	{
-		afa_1 = 0.76 + (0.06) / 30 * (fcu - 50);
-		afa_2 = 1 - (0.13) / 40 * (fcu - 40);
-	}
-	else
-	{
-		afa_1 = 0.82;
-		afa_2 = 0.87;
-	}
-	//抗压强度标准值（混规条文说明4.1.3）
-	auto fck = fcu * (0.88 * afa_1 * afa_2);
-	fck = (int)(fck / 0.1) * 0.1;
-	return fck;
-}
-
-double PMMSection::get_ftk(const double& fcu) const
-{
-	if (14 < fcu && fcu < 16)
-		return 1.27;
-	else if (19 < fcu && fcu < 21)
-		return 1.54;
-	else if (24 < fcu && fcu < 26)
-		return 1.78;
-	else if (29 < fcu && fcu < 31)
-		return 2.01;
-	else if (34 < fcu && fcu < 36)
-		return 2.20;
-	else if (39 < fcu && fcu < 41)
-		return 2.39;
-	else if (44 < fcu && fcu < 46)
-		return 2.51;
-	else if (49 < fcu && fcu < 51)
-		return 2.64;
-	else if (54 < fcu && fcu < 56)
-		return 2.74;
-	else if (59 < fcu && fcu < 61)
-		return 2.85;
-	else if (64 < fcu && fcu < 66)
-		return 2.93;
-	else if (69 < fcu && fcu < 71)
-		return 2.99;
-	else if (74 < fcu && fcu < 76)
-		return 3.05;
-	else if (79 < fcu && fcu < 81)
-		return 3.11;
-	else
-	{
-		auto ftk = 0.88 * pow(fcu, 0.55) * 0.395 * 0.924 * 0.87;
-		ftk = (int)(ftk / 0.01) * 0.01;
-		return ftk;
-	}
-}

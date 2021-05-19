@@ -39,7 +39,7 @@
 #include <UniaxialMaterial.h>
 #include "KerasModelExport.h"
 
-class AIDMMaterial //: public UniaxialMaterial
+class AIDMMaterial : public UniaxialMaterial
 {
   private:
       enum class AIDMParamEnum
@@ -63,7 +63,7 @@ class AIDMMaterial //: public UniaxialMaterial
       };
 
   public:
-    AIDMMaterial(const double& lammdaSV);
+    AIDMMaterial(const int& tag, const double& lammdaSV, const double& lammdaS, const double& lammdaT_pos);
     AIDMMaterial();
     ~AIDMMaterial();
 
@@ -93,7 +93,6 @@ public:
     double getStrain(void) {return TStrain;};
     double getLammda(void) { return this->lammda; }
     double getAxialRatio(void) { return this->axialRatio; }
-    double getLammdaSV(void) { return this->lammdaSV; }
     double getStress(void);
     double getTangent(void);
     double getInitialTangent(void);
@@ -122,16 +121,6 @@ public:
     bool checkCapacity(const double& Moment);
     //设定初始刚度
     void setInitialK(const double K);
-    //设定纵筋配筋比
-    inline void setlammdaT_pos(const double& lammdaT)
-    {
-        this->lammdaT_pos = lammdaT;
-    }
-    //设定纵筋配筋比
-    inline void setlammdaS(const double& LammdaS)
-    {
-        this->lammdaS = LammdaS;
-    }
     //是否为有效的AIDM对象
     bool isAvailabelAIDM() const;
     //单元是否已被杀死

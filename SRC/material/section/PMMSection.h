@@ -30,7 +30,7 @@ public:
 	PMMSection();
 	PMMSection(const int& tag, const int& section_type, 
 		const std::vector<double> dimension_vec, const std::vector<int> As_vec, 
-		bool is_beam, const int& fcu, const double& bar_fy, const double& steel_fy,
+		bool is_beam, const double& fck, const double& bar_fy, const double& steel_fy,
 		AutoMesh::SectionType matType, const double& lammdaSV_y, const double& lammdaSV_z);
 	PMMSection(const int& tag, const int& section_type,
 		const std::vector<double> dimension_vec, AutoMesh::SectionType matType);
@@ -59,8 +59,7 @@ private:
 private:
 	//纤维截面初始化
 	bool iniSection(const int& section_type, const std::vector<double> dimension_vec,
-		AutoMesh::SectionType& matType, 
-		const int& fcu, const double& bar_fy, const double& steel_fy, bool isbeam);
+		AutoMesh::SectionType& matType, const double& bar_fy, bool isbeam);
 
 public:
 	//设定初始刚度
@@ -96,14 +95,10 @@ public:
 	void Print(OPS_Stream& s, int flag);
 
 private:
-	double get_fck(const double& fcu) const;
-	double get_ftk(const double& fcu) const;
-
-private:
 	//防止承载力发生显著退化（相对于无轴力下的弯矩）
 	double min_capacity_factor = 0.2;
 	//是否考虑双偏压
-	bool consider_double_bending = true;
+	bool consider_double_bending = false;
 
 private:
 	//Section Analysis
@@ -127,7 +122,7 @@ private:
 	
 private:
 	/*强度*/
-	int fcu_;
+	double fck_;
 	double steel_fy_;
 	/*配筋*/
 	std::vector<int> as_vec_;

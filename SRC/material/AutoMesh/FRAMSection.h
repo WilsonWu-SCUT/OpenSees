@@ -64,6 +64,10 @@ namespace AutoMesh
 		double get_H(void) const;
 		//获得截面最大宽度
 		double get_B(void) const;
+		//是否为梁
+		inline bool isBeam(void) const {
+			return this->is_beam_;
+		};
 
 	private:
 		//获得工字钢标准数据格式

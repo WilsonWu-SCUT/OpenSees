@@ -107,8 +107,8 @@ void AIDMBeamColumn::setBasicForce(const double& L, const Vector& v)
 		q(5) = this->sectionJ_ptr->GJoverL(L) * v(5);
 		//转动刚度
 		auto secStress = this->sectionJ_ptr->getStressResultant();
-		q(2) = secStress(0);
-		q(4) = secStress(1);
+		q(2) = -secStress(0);
+		q(4) = -secStress(1);
 	}
 	//I端不铰接
 	if (this->sectionI_tag_ != -1)
@@ -201,8 +201,8 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, int Nd1, int Nd2,
 	//设定单元基本参数
 	this->initialAIDMBeamColumn(Nd1, Nd2, theTransf, rigidILength, rigidJLength);
 	//获得截面指针
-	auto sectionI = OPS_getUniaxialMaterial(tag_vec[0]);
-	auto sectionJ = OPS_getUniaxialMaterial(tag_vec[1]);
+	auto sectionI = tag_vec[0] == -1 ? nullptr : OPS_GetSectionForceDeformation(tag_vec[0]);
+	auto sectionJ = tag_vec[1] == -1? nullptr: OPS_GetSectionForceDeformation(tag_vec[1]);
 	//判断指针类型
 	if (sectionI != 0)
 	{
@@ -948,7 +948,7 @@ AIDMBeamColumn::commitState()
 	if(this->CLoadFactor == 0) return retVal;
 	//防止承载力越界
 	this->sectionI_ptr->checkCapacity(F, this->getTag(), true);
-	this->sectionI_ptr->checkCapacity(F, this->getTag(), false);
+	this->sectionJ_ptr->checkCapacity(F, this->getTag(), false);
 	this->isGravityConst = true;
 }
 
@@ -1199,7 +1199,7 @@ AIDMBeamColumn::getResponse(int responseID, Information& eleInfo)
 	{
 		auto i_vec = this->sectionI_ptr->getResponseVec();
 		auto j_vec = this->sectionJ_ptr->getResponseVec();
-		static Vector strainStress(6);
+		static Vector strainStress(i_vec.size() + j_vec.size());
 		int i = 0;
 		for (auto& var : i_vec)
 		{
