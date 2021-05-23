@@ -6,55 +6,86 @@
 
 using namespace AutoMesh;
 
-
-
-void* OPS_PMMSectionRectBeam()
+PMMSection* OPS_PMMSectionRC(const int& plasticSize, const int& elasticSize, const int& sec_type,
+	const int& dimention_size, const int& as_size, bool isBeam)
 {
-	//参数是不是满足
-	if (OPS_GetNumRemainingInputArgs() != 9 &&
-		OPS_GetNumRemainingInputArgs() != 3) {
-		opserr << "insufficient arguments for PMMSectionRectBeam\n";
-		return 0;
-	}
-	//判断是否未弹性
-	bool isPlastic = OPS_GetNumRemainingInputArgs() > 3;
-
 	// get tag
 	int tag;
 	int numData = 1;
 	if (OPS_GetIntInput(&numData, &tag) < 0) return 0;
-
+	//参数是不是满足
+	if (OPS_GetNumRemainingInputArgs() != (plasticSize - 1) &&
+		OPS_GetNumRemainingInputArgs() != (elasticSize - 1)) 
+	{
+		opserr << "insufficient arguments for AIDMSection with Tag:" << tag << endln;
+		return 0;
+	}
+	//判断是否未弹性
+	bool isPlastic = OPS_GetNumRemainingInputArgs() > (elasticSize - 1);
+	
 	//参数容器
-	std::vector<double> dimension_vec;
-	std::vector<int> As_vec = {0};
+	std::vector<double> dimension_vec = {};
+	std::vector<int> As_vec = {};
+	//如果是梁
+	if (isBeam) As_vec.push_back(0);
+
+	//材料强度
 	double fck;
 	double fy;
+	//面积配箍系数
 	double lammdaSV_y, lammdaSV_z;
 
 	//尺寸
-	numData = 2;
-	double double_data[2];
+	numData = dimention_size;
+	double* double_data = new double[dimention_size + 1 ];
+	//读取尺寸信息
 	if (OPS_GetDoubleInput(&numData, &double_data[0]) < 0) return 0;
-	for (auto info : double_data)  dimension_vec.push_back(info);
-
+	//读取尺寸信息
+	for(int i = 0; i < dimention_size; i++) dimension_vec.push_back(double_data[i]);
+	//是否塑性
 	if (isPlastic)
 	{
 		//配筋
-		numData = 2;
-		int int_data[2];
+		numData = as_size;
+		int* int_data = new int[as_size + 1];
 		if (OPS_GetIntInput(&numData, &int_data[0]) < 0) return 0;
-		for (auto info : int_data)  As_vec.push_back(info);
+		for (int i = 0; i < as_size; i++) As_vec.push_back(int_data[i]);
 		//材料强度
 		numData = 1;
 		if (OPS_GetDoubleInput(&numData, &fck) < 0) return 0;
 		if (OPS_GetDoubleInput(&numData, &fy) < 0) return 0;
 		if (OPS_GetDoubleInput(&numData, &lammdaSV_y) < 0) return 0;
 		if (OPS_GetDoubleInput(&numData, &lammdaSV_z) < 0) return 0;
-		return new PMMSection(tag, 1, dimension_vec, As_vec, true,
+		return new PMMSection(tag, sec_type, dimension_vec, As_vec, isBeam,
 			fck, fy, 345, AutoMesh::SectionType::RC, lammdaSV_y, lammdaSV_z);
+		delete int_data;
 	}
-	else return new PMMSection(tag, 1, dimension_vec, AutoMesh::SectionType::RC);	
+	else
+	{
+		numData = 1;
+		if (OPS_GetDoubleInput(&numData, &fck) < 0) return 0;
+		return new PMMSection(tag, sec_type, dimension_vec, fck, AutoMesh::SectionType::RC);
+	}
+	delete double_data;
+	
 }
+
+void* OPS_PMMSectionRectBeam()
+{
+	return OPS_PMMSectionRC(9, 4, 1, 2, 2, true);
+}
+
+void* OPS_PMMSectionRectColumn()
+{
+	return OPS_PMMSectionRC(10, 4, 1, 2, 3, false);
+}
+
+void* OPS_PMMSectionCirColumn()
+{
+	return OPS_PMMSectionRC(7, 3, 3, 1, 1, false);
+}
+
+
 
 PMMSection::PMMSection()
 	:SectionForceDeformation(0, SEC_TAG_PMMSection), 
@@ -80,7 +111,7 @@ PMMSection::PMMSection(const int& tag, const int& section_type,
 	sectionHeight_3_(0), sectionHeight_2_(0),
 	capacity_3pos_ini_(0), capacity_3neg_ini_(0),
 	capacity_2pos_ini_(0), capacity_2neg_ini_(0),
-	fck_(fck), steel_fy_(steel_fy)
+	fck_(fck), steel_fy_(steel_fy), as_vec_(0)
 {
 	//初始化截面
 	this->as_vec_ = As_vec;
@@ -113,15 +144,26 @@ PMMSection::PMMSection(const int& tag, const int& section_type,
 }
 
 PMMSection::PMMSection(const int& tag, const int& section_type,
-	const std::vector<double> dimension_vec, AutoMesh::SectionType matType)
+	const std::vector<double> dimension_vec, const double& main_strength, AutoMesh::SectionType matType)
 	: SectionForceDeformation(tag, SEC_TAG_PMMSection),
 	section_sp_(), FRAMSection_sp_(),
 	AIDM_3_ptr(), AIDM_2_ptr(),
 	sectionHeight_3_(0), sectionHeight_2_(0),
 	capacity_3pos_ini_(0), capacity_3neg_ini_(0),
 	capacity_2pos_ini_(0), capacity_2neg_ini_(0),
-	fck_(30), steel_fy_(345)
+	fck_(30), steel_fy_(345), as_vec_(0)
 {
+	//初始化
+	this->as_vec_ = {};
+	//判断强度
+	switch (matType)
+	{
+	case AutoMesh::SectionType::RC:
+		this->fck_ = main_strength; break;
+	case AutoMesh::SectionType::Steel:
+		this->steel_fy_ = main_strength; break;
+	default: break;
+	}
 	//初始化截面
 	if (!this->iniSection(section_type, dimension_vec, matType, 400, true)) return;
 	//初始化指针
@@ -136,8 +178,10 @@ PMMSection::PMMSection(const int& tag)
 	sectionHeight_3_(0), sectionHeight_2_(0),
 	capacity_3pos_ini_(0), capacity_3neg_ini_(0),
 	capacity_2pos_ini_(0), capacity_2neg_ini_(0),
-	fck_(0), steel_fy_(0)
+	fck_(0), steel_fy_(0), as_vec_(0)
 {
+	//初始化
+	this->as_vec_ = {};
 	//初始化指针
 	this->AIDM_2_ptr = new AIDMMaterial();
 	this->AIDM_3_ptr = new AIDMMaterial();
@@ -155,7 +199,7 @@ bool PMMSection::iniSection(const int& section_type, const std::vector<double> d
 	//构造截面
 	this->FRAMSection_sp_.reset(new AutoMesh::FRAMSection(section_type, matType));
 	//设定截面基本参数（保护层默认20）
-	if (!this->FRAMSection_sp_->set_dimension(dimension_vec, 20))
+	if (!this->FRAMSection_sp_->set_dimension(dimension_vec, 0))
 	{
 		opserr << "PMMSection::PMMSection Error to set_dimension\n";
 		return false;
@@ -232,6 +276,14 @@ void PMMSection::setCapacity(const Vector& force_vec, bool is_I)
 	auto my = (is_I ? force_vec(4) : force_vec(10) * -1) / 1E6;
 	auto mz = (is_I ? force_vec(5) : force_vec(11) * -1) / 1E6;
 	auto P = (is_I ? -1 * force_vec(0) : force_vec(6)) / 1E3;
+
+	//计算轴压系数
+	auto Ac = this->section_sp_->A(AutoMesh::MatType::Concrete) +
+		this->section_sp_->A(AutoMesh::MatType::CoverConcrete);
+	auto fA = this->steel_fy_ * this->section_sp_->A(AutoMesh::MatType::Steel) + Ac *
+		(P <= 0 ? this->fck_ : 0.1 * this->fck_);
+	auto axialRatio = fA == 0 ? 0 : P / fA * 1E3;
+
 	//初始化承载力
 	double myca_pos, myca_neg, mzca_pos, mzca_neg;
 	//计算承载力 单偏压
@@ -242,7 +294,9 @@ void PMMSection::setCapacity(const Vector& force_vec, bool is_I)
 		mzca_pos = this->section_sp_->get_moment(P, 270);
 		mzca_neg = this->section_sp_->get_moment(P, 90);
 	}
-	//考虑双偏压
+	//考虑双偏压（防止弯矩太小误判方向 1KN M）
+	else if (std::abs(my) < 1 && std::abs(mz) < 1)
+		return;
 	else this->section_sp_->get_moment(my, mz, P, myca_pos, myca_neg, mzca_pos, mzca_neg);
 	//更新单位
 	myca_pos *= 1E6; myca_neg *= 1E6; mzca_pos *= 1E6; mzca_neg *= 1E6;
@@ -258,12 +312,7 @@ void PMMSection::setCapacity(const Vector& force_vec, bool is_I)
 
 	mzca_neg = mzca_neg < this->capacity_2neg_ini_* this->min_capacity_factor ?
 		this->capacity_2neg_ini_ * this->min_capacity_factor : mzca_neg;
-	//计算轴压系数
-	auto Ac = this->section_sp_->A(AutoMesh::MatType::Concrete) +
-		this->section_sp_->A(AutoMesh::MatType::CoverConcrete);
-	auto fA = this->steel_fy_ * this->section_sp_->A(AutoMesh::MatType::Steel) + Ac * 
-		(P <= 0 ? this->fck_: 0.1 * this->fck_);
-	auto axialRatio = fA == 0 ? 0 : P / fA * 1E3;
+	
 	//设定承载力
 	this->AIDM_3_ptr->setCapcacity(myca_pos, myca_neg, axialRatio);
 	this->AIDM_2_ptr->setCapcacity(mzca_pos, mzca_neg, axialRatio);
@@ -303,6 +352,7 @@ std::vector<std::string> PMMSection::getResponseStrVec(bool is_I)
 		"strain3" + descp,
 		"stress3" + descp,
 		"lammda3" + descp,
+		"AxialRatio" + descp,
 	};
 }
 
@@ -316,6 +366,7 @@ std::vector<double> PMMSection::getResponseVec()
 		this->AIDM_3_ptr->getStrain(),
 		this->AIDM_3_ptr->getStress(),
 		this->AIDM_3_ptr->getLammda(),
+		this->AIDM_3_ptr->getAxialRatio(),
 	};
 }
 

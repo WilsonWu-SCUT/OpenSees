@@ -146,6 +146,8 @@ AIDMMaterial::setTrialStrain(double strain, double strainRate)
         this->setReloadingTangent(strain, TLoadingDirectPos);
     }
 
+
+
     return 0;
 }
 
@@ -211,9 +213,17 @@ int AIDMMaterial::setUnloadingTangent(const double& strain)
         stressFactor_neg * stressSA_neg / strainC_neg;
     //Unloading stiffness 计算卸载刚度
     auto unloading_K = CStress > 0 ? secant_Kc * afa_pos : secant_Kc * afa_neg;
+    //尚未达到更新滞回参数的条件
+    if (unloading_K == 0 && min_unloading_K < secant_Kc)
+    {
+        /*采用前一分析步的K值*/
+    }
     //Unloading stiffness is to rigid 卸载刚度不可越界
-    K = unloading_K < min_unloading_K ? min_unloading_K : unloading_K;
-    K = K > max_unloading_K ? max_unloading_K : K;
+    else
+    {
+        K = unloading_K < min_unloading_K ? min_unloading_K : unloading_K;
+        K = K > max_unloading_K ? max_unloading_K : K;
+    }
     //Updating TStrain TStress 更新应力应变
     auto stress = CStress + K * (strain - CStrain);
     //is balance 如果超过卸载边界 获得重加载刚度
@@ -679,8 +689,8 @@ double AIDMMaterial::getStressOnBackbone(const double& drift)
         auto coe_AM = (m - coe_BM) / pow(dc, 1);
         auto coe_BN = nMin;
         auto coe_AN = (n - coe_BN) / pow(dc, 1);
-        m = coe_AM * pow(drift, 1) + coe_BM;
-        n = coe_AN * pow(drift, 1) + coe_BN;
+        m = coe_AM * abs(pow(drift, 1)) + coe_BM;
+        n = coe_AN * abs(pow(drift, 1)) + coe_BN;
     }
     auto capacity = drift > 0 ? stressFactor_pos * stressSA_pos : stressFactor_neg * stressSA_neg;
     auto x = abs(drift / dc);

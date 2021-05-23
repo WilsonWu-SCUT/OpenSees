@@ -155,9 +155,8 @@ void* OPS_AIDMBeamColumn(void)
 
 	SectionForceDeformation* theSection = 0;
 	CrdTransf* theTrans = 0;
-	double data[6];
 	double rigidEnd[2];
-	int transfTag, secTag;
+	int transfTag;
 
 	//TransfTag
 	numData = 1;
@@ -264,6 +263,10 @@ AIDMBeamColumn::~AIDMBeamColumn()
 {
 	if (theCoordTransf)
 		delete theCoordTransf;
+	if (sectionI_ptr)
+		delete sectionI_ptr;
+	if (sectionJ_ptr)
+		delete sectionJ_ptr;
 }
 
 void AIDMBeamColumn::initialAIDMBeamColumn(int Nd1, int Nd2, CrdTransf& theTransf, 
@@ -950,6 +953,7 @@ AIDMBeamColumn::commitState()
 	this->sectionI_ptr->checkCapacity(F, this->getTag(), true);
 	this->sectionJ_ptr->checkCapacity(F, this->getTag(), false);
 	this->isGravityConst = true;
+	return retVal;
 }
 
 int

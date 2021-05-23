@@ -28,12 +28,14 @@ class PMMSection: public SectionForceDeformation
 {
 public:
 	PMMSection();
+	//通用弹塑性截面
 	PMMSection(const int& tag, const int& section_type, 
 		const std::vector<double> dimension_vec, const std::vector<int> As_vec, 
 		bool is_beam, const double& fck, const double& bar_fy, const double& steel_fy,
 		AutoMesh::SectionType matType, const double& lammdaSV_y, const double& lammdaSV_z);
+	//弹性截面
 	PMMSection(const int& tag, const int& section_type,
-		const std::vector<double> dimension_vec, AutoMesh::SectionType matType);
+		const std::vector<double> dimension_vec, const double& main_strength, AutoMesh::SectionType matType);
 	PMMSection(const int& tag);
 	~PMMSection();
 
@@ -98,7 +100,7 @@ private:
 	//防止承载力发生显著退化（相对于无轴力下的弯矩）
 	double min_capacity_factor = 0.2;
 	//是否考虑双偏压
-	bool consider_double_bending = false;
+	bool consider_double_bending = true;
 
 private:
 	//Section Analysis

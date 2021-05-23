@@ -88,6 +88,7 @@ Element::Element(int tag, int cTag)
    Kc(0), previousK(0), numPreviousK(0), index(-1), nodeIndex(-1),
    monitorPos(0)
 {
+    this->monitorPos = {};
   // does nothing
   ops_TheActiveElement = this;
 }

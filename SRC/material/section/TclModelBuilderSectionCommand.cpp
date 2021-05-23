@@ -123,6 +123,9 @@ extern void *OPS_TubeSection(void);
 extern void *OPS_ParallelSection(void);
 //Wilson
 extern void* OPS_PMMSectionRectBeam(void); //Wilson
+extern void* OPS_PMMSectionRectColumn(void);//Wilson
+extern void* OPS_PMMSectionCirColumn(void);//Wilson
+
 
 int
 TclCommand_addFiberSection (ClientData clientData, Tcl_Interp *interp, int argc,
@@ -182,8 +185,22 @@ TclModelBuilderSectionCommand (ClientData clientData, Tcl_Interp *interp, int ar
 	return TCL_ERROR;
     }	
 
-	else if (strcmp(argv[1], "PMMSectionRectBeam") == 0) {
+	else if (strcmp(argv[1], "AUDMSectionRectBeam") == 0) {
 		void* theMat = OPS_PMMSectionRectBeam();
+		if (theMat != 0)
+			theSection = (SectionForceDeformation*)theMat;
+		else
+			return TCL_ERROR;
+	}
+	else if (strcmp(argv[1], "AUDMSectionRectColumn") == 0) {
+		void* theMat = OPS_PMMSectionRectColumn();
+		if (theMat != 0)
+			theSection = (SectionForceDeformation*)theMat;
+		else
+			return TCL_ERROR;
+	}
+	else if (strcmp(argv[1], "AUDMSectionCirColumn") == 0) {
+		void* theMat = OPS_PMMSectionCirColumn();
 		if (theMat != 0)
 			theSection = (SectionForceDeformation*)theMat;
 		else
