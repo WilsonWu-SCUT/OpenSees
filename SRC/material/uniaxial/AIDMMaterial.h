@@ -93,6 +93,7 @@ public:
     double getStrain(void) {return TStrain;};
     double getLammda(void) { return this->lammda; }
     double getAxialRatio(void) { return this->axialRatio; }
+    int getLoadingType(void) { return this->TLoadingTag; }
     double getStress(void);
     double getTangent(void);
     double getInitialTangent(void);
@@ -126,6 +127,8 @@ public:
     //单元是否已被杀死
     bool isKill() const;
     void Kill();
+    //重设刚度
+    void ResetTrialStrain(const double& strain, const int& loadingTag);
 
   private:
       //从骨架上计算应力
@@ -242,6 +245,8 @@ public:
   private:
     //刚度是否转为弹性
     bool isConstant;
+    //加载模式 1: 骨架 2：重加载 3：卸载
+    int TLoadingTag;
 };
 
 

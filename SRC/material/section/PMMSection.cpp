@@ -295,7 +295,7 @@ void PMMSection::setCapacity(const Vector& force_vec, bool is_I)
 		mzca_neg = this->section_sp_->get_moment(P, 90);
 	}
 	//考虑双偏压（防止弯矩太小误判方向 1KN M）
-	else if (std::abs(my) < 1 && std::abs(mz) < 1)
+	else if (std::abs(my) < 10 && std::abs(mz) < 10)
 		return;
 	else this->section_sp_->get_moment(my, mz, P, myca_pos, myca_neg, mzca_pos, mzca_neg);
 	//更新单位
@@ -334,10 +334,34 @@ bool PMMSection::checkCapacity(const Vector& force_vec, const int& eleTag, bool 
 
 int PMMSection::setTrialDeformation(const Vector& deformation_vec, bool is_I)
 {
-	int retVal = this->AIDM_3_ptr->setTrialStrain(
-		is_I ? deformation_vec(3): -deformation_vec(4));
-	retVal += this->AIDM_2_ptr->setTrialStrain(
-		is_I ? deformation_vec(1) : -deformation_vec(2));
+	auto deform3 = is_I ? deformation_vec(3) : -deformation_vec(4);
+	auto deform2 = is_I ? deformation_vec(1) : -deformation_vec(2);
+	//更新刚度
+	int retVal = this->AIDM_3_ptr->setTrialStrain(deform3);
+	retVal += this->AIDM_2_ptr->setTrialStrain(deform2);
+	//获得加载类型
+	auto loadingType3 = this->AIDM_3_ptr->getLoadingType();
+	auto loadingType2 = this->AIDM_2_ptr->getLoadingType();
+	//如果加载类型不同
+	if (loadingType3 != loadingType2)
+	{
+		//如果其中一者为重加载一者为骨架：走骨架
+		if (loadingType3 == 1 && loadingType2 == 2)
+			this->AIDM_2_ptr->ResetTrialStrain(deform2, loadingType3);
+		else if (loadingType3 == 2 && loadingType2 == 1)
+			this->AIDM_3_ptr->ResetTrialStrain(deform3, loadingType2);
+	}
+	//判断刚度是否相反
+	else if (this->AIDM_2_ptr->getTangent() * this->AIDM_3_ptr->getTangent() < 0)
+	{
+		//如果均是重加载
+		if (loadingType3 == 2 && loadingType2 == 2)
+		{
+			this->AIDM_3_ptr->ResetTrialStrain(deform3, 1);
+			this->AIDM_2_ptr->ResetTrialStrain(deform2, 1);
+		}
+	}
+
 	return retVal;
 }
 

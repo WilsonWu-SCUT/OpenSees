@@ -151,6 +151,25 @@ AIDMMaterial::setTrialStrain(double strain, double strainRate)
     return 0;
 }
 
+void AIDMMaterial::ResetTrialStrain(const double& strain, const int& loadingTag)
+{
+    //is elastic 单元为弹性
+    if (this->isConstant || !this->isAvailabelAIDM())
+    {
+        TStrain = strain;
+        TStress = TStrain * K;
+    }
+    //骨架
+    else if (loadingTag == 1)
+        this->setTangentOnBackbone(strain, TLoadingDirectPos);
+    //重加载
+    else if (loadingTag == 2)
+        this->setReloadingTangent(strain, TLoadingDirectPos);
+    //卸载
+    else if (loadingTag == 3)
+        this->setUnloadingTangent(strain);
+}
+
 int 
 AIDMMaterial::setTrial(double strain, double &stress, double &tangent, double strainRate)
 {
@@ -169,28 +188,39 @@ void AIDMMaterial::setTangentOnBackbone(const double& strain, bool loading_direc
     //In same side 当应变较大时，根据上次提交的应变确定指向应变
     if ((loading_direct_pos ? strain >= 0 : strain <= 0))
     {
-        oriented_strain = abs(oriented_strain) > abs(CStrain * backbone_ortStrainFactor) ?
-            oriented_strain : CStrain * backbone_ortStrainFactor;
+        //通过strain确定刚度 否则刚度不发生变化
+        oriented_strain = abs(oriented_strain) > abs(this->CStrain * backbone_ortStrainFactor) ?
+            oriented_strain : this->CStrain * backbone_ortStrainFactor;
+        auto strainmax = loading_direct_pos ? this->CstrainMax : this->CstrainMin;
+        //判断指向的位移（离最大变形值太远 则仍走重加载路线）
+        if (std::abs(oriented_strain) < std::abs(strainmax)) 
+            return;
     }
+    //更新加载模式
+    this->TLoadingTag = 1;
     // strain out of oriented 如果指向应变小于目标应变  则指向应变改为目标应变
     if((loading_direct_pos? oriented_strain < strain: oriented_strain > strain))
         oriented_strain = strain;
     //通过应变获得骨架上的应力
     auto oriented_stress = this->getStressOnBackbone(oriented_strain);
+
+    /*智能使用Cstrain*/
+    auto strain0 = this->CStrain;
+    auto stress0 = this->CStress;
     //Updating stiffness 如果没有应变增量 则取上一步采用的刚度值
-    if (oriented_strain - CStrain == 0) return;
+    if (oriented_strain - strain0 == 0) return;
     //Updating stiffness  更新刚度
-    K = (oriented_stress - CStress) / (oriented_strain - CStrain);
+    K = (oriented_stress - stress0) / (oriented_strain - strain0);
     // Updating TStrain TStress 更新该迭代步下的应力应变
     TStrain = strain;
-    TStress = CStress + K * (strain - CStrain);
+    TStress = stress0 + K * (strain - strain0);
     //is kill the element 变形超过峰值变形（有上升下降）
     bool isPost = abs(strain) > (loading_direct_pos ? strainC_pos : strainC_neg);
     //峰值承载力
     auto backboneMaxStress = loading_direct_pos ? stressFactor_pos * stressSA_pos :
         stressFactor_neg * stressSA_neg;
     //残余应力系数是否越界
-    bool isStressBelow = abs(TStress) / abs(backboneMaxStress) < this->killStressFactor;
+    bool isStressBelow = abs(this->TStress) / abs(backboneMaxStress) < this->killStressFactor;
     //软化段、残余应力越界、负刚度 则认为构件可以被杀死
     if (K < 0 && isPost && isStressBelow)
     {
@@ -201,6 +231,8 @@ void AIDMMaterial::setTangentOnBackbone(const double& strain, bool loading_direc
 
 int AIDMMaterial::setUnloadingTangent(const double& strain)
 {
+    //更新加载模式
+    this->TLoadingTag = 3;
     //Update params 更新滞回参数
     this->updateHystereticParams(strain > 0);
     //Maximum unloading stiffness 最大卸载刚度 指向零点
@@ -236,6 +268,8 @@ int AIDMMaterial::setUnloadingTangent(const double& strain)
 
 void AIDMMaterial::setReloadingTangent(const double& strain, bool loading_direct_pos)
 {
+    //更新加载模式
+    this->TLoadingTag = 2;
     //Update params 更新滞回参数
     this->updateHystereticParams(loading_direct_pos);
     //Maximum deformation 最大变形
