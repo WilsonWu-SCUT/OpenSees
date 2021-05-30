@@ -118,7 +118,7 @@ PMMSection::PMMSection(const int& tag, const int& section_type,
 	if (!this->iniSection(section_type, dimension_vec, matType, bar_fy, is_beam)) return;
 	//计算受拉受压配筋比
 	auto lammdaT_2_pos = 1;
-	auto lammdaT_3_pos = this->FRAMSection_sp_->isBeam() ? this->as_vec_[2] / this->as_vec_[1] : 1;
+	auto lammdaT_3_pos = this->FRAMSection_sp_->isBeam() ? (double)this->as_vec_[2] / this->as_vec_[1] : 1;
 	//截面分析
 	this->section_sp_->analysis(4);
 	//计算承载力
@@ -129,12 +129,11 @@ PMMSection::PMMSection(const int& tag, const int& section_type,
 	//纵筋配筋特征值
 	auto lammdaS = this->section_sp_->A(AutoMesh::MatType::ReinforceBar) / this->section_sp_->A()
 		* bar_fy / this->fck_;
-	//AIDMTAG
-	int tag2 = tag * 100 + 2;
-	int tag3 = tag * 100 + 3;
 	//创建材料指针
-	this->AIDM_2_ptr = lammdaSV_y <= 0 ? new AIDMMaterial() : new AIDMMaterial(tag2, lammdaSV_y, lammdaS, lammdaT_2_pos);
-	this->AIDM_3_ptr = lammdaSV_z <= 0 ? new AIDMMaterial() : new AIDMMaterial(tag3, lammdaSV_z, lammdaS, lammdaT_3_pos);
+	this->AIDM_2_ptr = lammdaSV_y <= 0 ? new AIDMMaterial() : new AIDMMaterial(lammdaSV_y, lammdaS, lammdaT_2_pos);
+	this->AIDM_3_ptr = lammdaSV_z <= 0 ? new AIDMMaterial() : new AIDMMaterial(lammdaSV_z, lammdaS, lammdaT_3_pos);
+	//一者不存在则不考虑双偏压
+	if (lammdaSV_y <= 0 || lammdaSV_z <= 0) this->consider_double_bending = false;
 	//设定参数
 	this->AIDM_3_ptr->setCapcacity(this->capacity_3pos_ini_, this->capacity_3neg_ini_, 0);
 	this->AIDM_3_ptr->updateSkeletonParams();
@@ -155,6 +154,8 @@ PMMSection::PMMSection(const int& tag, const int& section_type,
 {
 	//初始化
 	this->as_vec_ = {};
+	//不考虑双偏压
+	this->consider_double_bending = false;
 	//判断强度
 	switch (matType)
 	{
@@ -239,42 +240,43 @@ bool PMMSection::iniSection(const int& section_type, const std::vector<double> d
 	return true;
 }
 
-void PMMSection::setInitialK(const double& L, const int& factor)
+void PMMSection::setInitialK(const double& L, const int& factor, bool ensureIniK)
 {
 	/*设定初始刚度*/
 	auto initial_K2 = this->E() * this->Iz() * factor / L;
 	auto initial_K3 = this->E() * this->Iy() * factor / L;
 	//调整初始刚度
-	this->AIDM_2_ptr->setInitialK(initial_K2);
-	this->AIDM_3_ptr->setInitialK(initial_K3);
+	this->AIDM_2_ptr->setInitialK(initial_K2, ensureIniK);
+	this->AIDM_3_ptr->setInitialK(initial_K3, ensureIniK);
 }
 
-void PMMSection::setLammda(const Vector& force_vec, bool is_I)
+void PMMSection::setLammda(const double& shearSpan3, const double& shearSpan2)
 {
 	//防止非法计算
-	if (force_vec(2) == 0 || force_vec(8) == 0 || force_vec(1) == 0 || force_vec(7) == 0 || 
-		this->sectionHeight_3_ == 0 || this->sectionHeight_2_ == 0)
+	if (this->sectionHeight_3_ == 0 || this->sectionHeight_2_ == 0)
 		return;
-	//计算剪跨
-	auto shearSpan_3 = is_I ?
-		force_vec(4) / force_vec(2) : force_vec(10) / force_vec(8);
-	auto shearSpan_2 = is_I ?
-		force_vec(5) / force_vec(1) : force_vec(11) / force_vec(7);
 	//计算剪跨比
-	auto shearspanRatio_3 = std::abs(shearSpan_3) / this->sectionHeight_3_;
-	auto shearspanRatio_2 = std::abs(shearSpan_2) / this->sectionHeight_2_;
+	auto shearspanRatio_3 = shearSpan3 / this->sectionHeight_3_;
+	auto shearspanRatio_2 = shearSpan2 / this->sectionHeight_2_;
 	//设定剪跨比
-	this->AIDM_2_ptr->setLammda(shearspanRatio_2);
+	if(shearspanRatio_2 > 0)
+		this->AIDM_2_ptr->setLammda(shearspanRatio_2);
+	if (shearspanRatio_3 > 0)
 	this->AIDM_3_ptr->setLammda(shearspanRatio_3);
 }
 
-void PMMSection::setCapacity(const Vector& force_vec, bool is_I)
+void PMMSection::setCapacity(const Vector& force_vec, const Vector& deformation_vec, bool is_I)
 {
 	//AIDM不存在
 	if (this->as_vec_.size() == 0) return;
 	//计算内力
+	auto deform3 = is_I ? deformation_vec(3) : -deformation_vec(4);
+	auto deform2 = is_I ? deformation_vec(1) : -deformation_vec(2);
+
 	auto my = (is_I ? force_vec(4) : force_vec(10) * -1) / 1E6;
 	auto mz = (is_I ? force_vec(5) : force_vec(11) * -1) / 1E6;
+
+
 	auto P = (is_I ? -1 * force_vec(0) : force_vec(6)) / 1E3;
 
 	//计算轴压系数
@@ -286,18 +288,85 @@ void PMMSection::setCapacity(const Vector& force_vec, bool is_I)
 
 	//初始化承载力
 	double myca_pos, myca_neg, mzca_pos, mzca_neg;
+	//不考虑双偏压的强度
+	double myca_pos_sc, myca_neg_sc, mzca_pos_sc, mzca_neg_sc;
+	myca_pos_sc = this->section_sp_->get_moment(P, 180);
+	myca_neg_sc = this->section_sp_->get_moment(P, 0);
+	mzca_pos_sc = this->section_sp_->get_moment(P, 270);
+	mzca_neg_sc = this->section_sp_->get_moment(P, 90);
 	//计算承载力 单偏压
 	if (!this->consider_double_bending)
 	{
-		myca_pos = this->section_sp_->get_moment(P, 180);
-		myca_neg = this->section_sp_->get_moment(P, 0);
-		mzca_pos = this->section_sp_->get_moment(P, 270);
-		mzca_neg = this->section_sp_->get_moment(P, 90);
+		myca_pos = myca_pos_sc;
+		myca_neg = myca_neg_sc;
+		mzca_pos = mzca_pos_sc;
+		mzca_neg = mzca_neg_sc;
 	}
-	//考虑双偏压（防止弯矩太小误判方向 1KN M）
-	else if (std::abs(my) < 10 && std::abs(mz) < 10)
-		return;
-	else this->section_sp_->get_moment(my, mz, P, myca_pos, myca_neg, mzca_pos, mzca_neg);
+	else
+	{
+		//卸载阶段不更新双偏压承载力
+		if (this->AIDM_2_ptr->getLoadingType() == 3 || this->AIDM_3_ptr->getLoadingType() == 3)
+			return;
+		//二四象限不考虑
+		if (deform3 * my <= 0 || deform2 * mz <= 0) return;
+		//需更新双偏压承载力的内力边界
+		auto my_limit = (my > 0 ? myca_pos_sc : myca_neg_sc) * this->double_bending_factor;
+		auto mz_limit = (mz > 0 ? mzca_pos_sc : mzca_neg_sc) * this->double_bending_factor;
+		//计算峰值承载力对应的变形
+		auto deform3_c = this->AIDM_3_ptr->getCstrain(deform3 > 0);
+		auto deform2_c = this->AIDM_2_ptr->getCstrain(deform2 > 0);
+		auto deform3_ini = this->AIDM_3_ptr->getInitialStrain(deform3 > 0);
+		auto deform2_ini = this->AIDM_2_ptr->getInitialStrain(deform2 > 0);
+		//承载力系数：基于变形 基于力
+		double myPosDeFactor = 0.0; double myNegDeFactor = 0.0;
+		double mzPosDeFactor = 0.0; double mzNegDeFactor = 0.0;
+		double myPosFoFactor = 0.0; double myNegFoFactor = 0.0;
+		double mzPosFoFactor = 0.0; double mzNegFoFactor = 0.0;
+		//不满足力的更新条件 也 不满足变形更新条件
+		if (std::abs(my) <= my_limit || std::abs(mz) <= mz_limit)
+		{
+			//第二 第四 象限
+			if (deform3 * my <= 0 || deform2 * mz <= 0)
+				return;
+			//变形太小
+			if (std::abs(deform3) <= deform3_ini || std::abs(deform2) <= deform2_ini)
+				return;
+		}
+		//根据内力判别双偏压
+		this->section_sp_->get_moment(my, mz, P, myca_pos, myca_neg, mzca_pos, mzca_neg);
+		//如果处于一 三象限
+		if (deform3 * my > 0 && deform2 * mz > 0)
+		{
+			//变形大于峰值
+			if (std::abs(deform3) >= deform3_c || std::abs(deform2) >= deform2_c)
+			{
+				//根据变形判别双偏压
+				this->section_sp_->get_moment(deform3, deform2, P, myca_pos, myca_neg, mzca_pos, mzca_neg);
+			}
+			else
+			{
+				//获得基于力的承载力系数
+				myPosFoFactor = myca_pos / myca_pos_sc;
+				myNegFoFactor = myca_neg / myca_neg_sc;
+				mzPosFoFactor = mzca_pos / mzca_pos_sc;
+				mzNegFoFactor = mzca_neg / mzca_neg_sc;
+				//根据变形判别双偏压
+				this->section_sp_->get_moment(deform3, deform2, P, myca_pos, myca_neg, mzca_pos, mzca_neg);
+				//获得基于变形的承载力系数
+				myPosDeFactor = myca_pos / myca_pos_sc;
+				myNegDeFactor = myca_neg / myca_neg_sc;
+				mzPosDeFactor = mzca_pos / mzca_pos_sc;
+				mzNegDeFactor = mzca_neg / mzca_neg_sc;
+				//获得系数
+				auto factor = std::max(std::abs(deform3) / deform3_c, std::abs(deform2) / deform2_c);
+				//重构承载力
+				myca_pos = myca_pos_sc * (myPosDeFactor * factor + myPosFoFactor * (1 - factor));
+				myca_neg = myca_neg_sc * (myNegDeFactor * factor + myNegFoFactor * (1 - factor));
+				mzca_pos = mzca_pos_sc * (mzPosDeFactor * factor + mzPosFoFactor * (1 - factor));
+				mzca_neg = mzca_neg_sc * (mzNegDeFactor * factor + mzNegFoFactor * (1 - factor));
+			}
+		}
+	}
 	//更新单位
 	myca_pos *= 1E6; myca_neg *= 1E6; mzca_pos *= 1E6; mzca_neg *= 1E6;
 	//防止承载力过小
@@ -361,7 +430,6 @@ int PMMSection::setTrialDeformation(const Vector& deformation_vec, bool is_I)
 			this->AIDM_2_ptr->ResetTrialStrain(deform2, 1);
 		}
 	}
-
 	return retVal;
 }
 
@@ -412,6 +480,7 @@ SectionForceDeformation* PMMSection::getCopy(void)
 	section->as_vec_ = this->as_vec_;
 	section->fck_ = this->fck_;
 	section->steel_fy_ = this->steel_fy_;
+	section->consider_double_bending = this->consider_double_bending;
 
 	//重构AIDM指针
 	section->AIDM_2_ptr = (AIDMMaterial*)this->AIDM_2_ptr->getCopy();

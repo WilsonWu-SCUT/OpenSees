@@ -490,7 +490,7 @@ TclModelBuilderElementCommand(ClientData clientData, Tcl_Interp *interp,
       return TCL_ERROR;
     }
   }
-  else if (strcmp(argv[1], "AIDMBeamColumn") == 0) {
+  else if (strcmp(argv[1], "AIDMBeamColumn") == 0 || strcmp(argv[1], "AUDMBeamColumn") == 0) {
   Element* theEle = 0;
   if (OPS_GetNDM() == 2)
   {

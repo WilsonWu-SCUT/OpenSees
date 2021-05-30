@@ -68,27 +68,25 @@ std::vector<double> AIDMMaterial::gamma_vec = { 0, 1, 1 };
 std::vector<double> AIDMMaterial::eta_vec = { 0, 1, 6 };
 int AIDMMaterial::predict_num = 0;
 
-AIDMMaterial::AIDMMaterial(const int& tag, const double& lammdaSV, const double& lammdaS, const double& lammdaT_pos)
-:UniaxialMaterial(tag, MAT_TAG_AIDMMaterial),
-TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
+AIDMMaterial::AIDMMaterial(const double& lammdaSV, const double& lammdaS, const double& lammdaT_pos)
+:TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
 K(0), CK(0.0),
 CstrainMax(0), CstrainMin(0),
 lammda(initialLammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
-afa_pos(0.0), afa_neg(0.0), isConstant(false),TLoadingDirectPos(true), mnFactor(1),
+afa_pos(0.0), afa_neg(0.0), isConstant(false),TLoadingDirectPos(true), mnFactor_(1),
 stressSA_pos(0), stressSA_neg(0),axialRatio(0)
 {
 }
 
 
 AIDMMaterial::AIDMMaterial()
-:UniaxialMaterial(0, MAT_TAG_AIDMMaterial),
- TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
+: TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
 K(0), CK(0.0),
 CstrainMax(0), CstrainMin(0),
 lammda(initialLammda), lammdaS(0.0), lammdaSV(0.0), lammdaT_pos(0.0),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
-afa_pos(0.0), afa_neg(0.0), isConstant(false), TLoadingDirectPos(true), mnFactor(1),
+afa_pos(0.0), afa_neg(0.0), isConstant(false), TLoadingDirectPos(true), mnFactor_(1),
 stressSA_pos(0), stressSA_neg(0), axialRatio(0)
 {
 
@@ -117,6 +115,14 @@ AIDMMaterial::setTrialStrain(double strain, double strainRate)
         TStress = TStrain * K;
         return 0;
     }
+    //割线法
+    //if (this->K != this->CK)
+    //{
+    //    TStrain = strain;
+    //    TStress = this->CStress + K * (strain - this->CStrain);
+    //}
+
+
     //判断加载方向 产生非常小的变形才判断加载方向
     if (abs(CStrain - strain) > 1E-16)  TLoadingDirectPos = CStrain < strain;
     //未发生任何加载 且应变都不为0（非初始状态）
@@ -146,8 +152,6 @@ AIDMMaterial::setTrialStrain(double strain, double strainRate)
         this->setReloadingTangent(strain, TLoadingDirectPos);
     }
 
-
-
     return 0;
 }
 
@@ -168,6 +172,18 @@ void AIDMMaterial::ResetTrialStrain(const double& strain, const int& loadingTag)
     //卸载
     else if (loadingTag == 3)
         this->setUnloadingTangent(strain);
+}
+
+double AIDMMaterial::GetSoftenFactor(bool isPos)
+{
+    auto strainMax = isPos ? this->CstrainMax : this->CstrainMin;
+    auto Mcstrain = isPos ? this->strainC_pos : this->strainC_neg;
+    auto stressMax = isPos ? this->stressSA_pos : this->stressSA_neg;
+    //判断是否软化
+    if (std::abs(strainMax) <= std::abs(Mcstrain)) return 1;
+    //计算承载力
+    auto stress = this->getStressOnBackbone(strainMax, this->mnFactor_);
+    return std::abs(stress) / stressMax;
 }
 
 int 
@@ -202,7 +218,7 @@ void AIDMMaterial::setTangentOnBackbone(const double& strain, bool loading_direc
     if((loading_direct_pos? oriented_strain < strain: oriented_strain > strain))
         oriented_strain = strain;
     //通过应变获得骨架上的应力
-    auto oriented_stress = this->getStressOnBackbone(oriented_strain);
+    auto oriented_stress = this->getStressOnBackbone(oriented_strain, this->mnFactor_);
 
     /*智能使用Cstrain*/
     auto strain0 = this->CStrain;
@@ -239,7 +255,7 @@ int AIDMMaterial::setUnloadingTangent(const double& strain)
     auto min_unloading_K = CStress / CStrain;
     //Oriented Strain Stress 最大卸载刚度也不应大于初始刚度（针对y轴附近的震荡）
     auto oriented_strain = backbone_inidStrainFactor * (strain > 0 ? strainC_pos : -strainC_neg);
-    auto max_unloading_K = this->getStressOnBackbone(oriented_strain) / oriented_strain;
+    auto max_unloading_K = this->getStressOnBackbone(oriented_strain, this->mnFactor_) / oriented_strain;
     //Caping secant stiffness 峰值点的割线刚度系数
     auto secant_Kc = CStress > 0 ? stressFactor_pos * stressSA_pos / strainC_pos :
         stressFactor_neg * stressSA_neg / strainC_neg;
@@ -285,7 +301,9 @@ void AIDMMaterial::setReloadingTangent(const double& strain, bool loading_direct
     auto secant_Kc = loading_direct_pos ? stressFactor_pos * stressSA_pos / strainC_pos :
         stressFactor_neg * stressSA_neg / strainC_neg;
     //break proint maxstress with sign 二段重加载刚度不可大于初始刚度
-    auto brk_prt_strain_max = max_strain - (oreinted_prt_stress - brk_prt_stress) / this->getInitialTangent();
+    auto initial_strain_pos = loading_direct_pos? this->backbone_inidStrainFactor * strainC_pos: -this->backbone_inidStrainFactor * strainC_neg;
+    auto iniK = this->getStressOnBackbone(initial_strain_pos, this->mnFactor_) / initial_strain_pos;
+    auto brk_prt_strain_max = max_strain - (oreinted_prt_stress - brk_prt_stress) / iniK;
     //towards to oriented prt: 是否已经过拐点应力
     bool isLargerthanBrkprtStress = loading_direct_pos ? CStress > brk_prt_stress: CStress < brk_prt_stress;
     //是否已经经过 拐点最大应变
@@ -446,7 +464,7 @@ void AIDMMaterial::updateHystereticParams(bool is_pos)
     auto max_strain = is_pos ? CstrainMax : CstrainMin;
     auto max_stress = is_pos ? CstressMaxFactor * stressFactor_pos * stressSA_pos :
         CstressMinFactor * stressFactor_neg * stressSA_neg;
-    auto skeleton_stress = this->getStressOnBackbone(max_strain);
+    auto skeleton_stress = this->getStressOnBackbone(max_strain, this->mnFactor_);
     //Caping secant stiffness
     auto secant_Kc = is_pos ? stressFactor_pos * stressSA_pos / strainC_pos :
         stressFactor_neg * stressSA_neg / strainC_neg;
@@ -459,11 +477,11 @@ void AIDMMaterial::updateHystereticParams(bool is_pos)
     {
         //Oriented Strain Stress
         auto oriented_strain = backbone_inidStrainFactor * (is_pos ? strainC_pos : -strainC_neg);
-        secantK = this->getStressOnBackbone(oriented_strain) / (oriented_strain);
+        secantK = this->getStressOnBackbone(oriented_strain, this->mnFactor_) / (oriented_strain);
     }
     //post capping ignore the stiffness dagradation
     else if (isPreCapping && abs(max_stress) / abs(skeleton_stress) < 0.8)
-        secantK = this->getStressOnBackbone(max_strain) / (max_strain);
+        secantK = this->getStressOnBackbone(max_strain, this->mnFactor_) / (max_strain);
     auto secantKFactor = this->getRegularizedValue(secantK / secant_Kc, AIDMParamEnum::SecantK);
     auto& componentParamvec = this->getComponentParamsVec(is_pos);
     componentParamvec.push_back(secantKFactor);
@@ -507,10 +525,10 @@ double
 AIDMMaterial::getInitialTangent(void)
 {
     if (!this->isAvailabelAIDM()) return this->K;
-    auto pos_dStrain = this->backbone_inidStrainFactor * strainC_pos;
-    auto neg_dStrain = this->backbone_inidStrainFactor * strainC_neg;
-    auto K0_pos = this->getStressOnBackbone(pos_dStrain) / pos_dStrain;
-    auto K0_neg = this->getStressOnBackbone(-neg_dStrain) / (-neg_dStrain);
+    auto pos_dStrain = this->backbone_iniKFactor * strainC_pos;
+    auto neg_dStrain = this->backbone_iniKFactor * strainC_neg;
+    auto K0_pos = this->getStressOnBackbone(pos_dStrain, this->mnFactor_) / pos_dStrain;
+    auto K0_neg = this->getStressOnBackbone(-neg_dStrain, this->mnFactor_) / (-neg_dStrain);
     return K0_pos > K0_neg ? K0_pos : K0_neg;
 }
 
@@ -527,6 +545,7 @@ AIDMMaterial::commitState(void)
     CLoadingDirectPos = TLoadingDirectPos;
     //Need to kill 判断是否为无效单元或单元已被杀死
     if (this->isConstant || !this->isAvailabelAIDM()) return 0;
+
     //Record Maxmum deformation
     if (CStrain > 0)
     {
@@ -543,7 +562,8 @@ AIDMMaterial::commitState(void)
         //承载力低于限值要求
         bool isCapacitybelow = abs(CstressMaxFactor) < this->killStressFactor;
         // 处于软化段 承载力低于限值要求 承载力在退化过程 （为何不通过负刚度做判断）
-        if (isSoften && isPost && isCapacitybelow) this->Kill();
+        if (isSoften && isPost && isCapacitybelow) 
+            this->Kill();
     }
     else
     {
@@ -560,7 +580,8 @@ AIDMMaterial::commitState(void)
         //承载力低于限值要求
         bool isCapacitybelow = abs(CstressMinFactor) < this->killStressFactor;
         // 处于软化段 承载力低于限值要求 承载力在退化过程 （为何不通过负刚度做判断）
-        if (isSoften && isPost && isCapacitybelow) this->Kill();
+        if (isSoften && isPost && isCapacitybelow) 
+            this->Kill();
     }
     return 0;
 }
@@ -597,7 +618,7 @@ AIDMMaterial::revertToStart(void)
     this->isConstant = false;
     this->TLoadingDirectPos = true;
   
-    this->mnFactor = 1;
+    this->mnFactor_ = 1;
     this->CstrainMax = 0;   this->CstrainMin = 0;
     this->CstressMaxFactor = 0;   this->CstressMinFactor = 0;
 
@@ -605,52 +626,12 @@ AIDMMaterial::revertToStart(void)
 }
 
 
-UniaxialMaterial *
+AIDMMaterial*
 AIDMMaterial::getCopy(void)
 {
-    AIDMMaterial* mat = new AIDMMaterial(this->getTag(), this->lammdaSV, this->lammdaS, this->lammdaT_pos);
+    AIDMMaterial* mat = new AIDMMaterial(this->lammdaSV, this->lammdaS, this->lammdaT_pos);
     return mat;
 }
-
-#pragma region NoDefine
-
-int
-AIDMMaterial::sendSelf(int cTag, Channel& theChannel)
-{
-    opserr << "AIDMMaterial::sendSelf() - failed to send data\n";
-    return -1;
-}
-
-
-int
-AIDMMaterial::recvSelf(int cTag, Channel& theChannel,
-    FEM_ObjectBroker& theBroker)
-{
-    opserr << "AIDMMaterial::recvSelf() - failed to receive data\n";
-    return -1;
-}
-
-
-void
-AIDMMaterial::Print(OPS_Stream& s, int flag)
-{
-    opserr << "AIDMMaterial::Print() - failed to print\n";
-}
-
-
-int
-AIDMMaterial::setParameter(const char** argv, int argc, Parameter& param)
-{
-    return -1;
-}
-
-int
-AIDMMaterial::updateParameter(int parameterID, Information& info)
-{
-    return -1;
-}
-
-#pragma endregion
 
 void AIDMMaterial::setLammda(const double& Lammda)
 {
@@ -685,9 +666,9 @@ void AIDMMaterial::setCapcacity(const double& m_pos, const double& m_neg, const 
     }
     else
     {
-        if (std::abs(m_pos - this->stressSA_pos) > 20E6)
+        if (std::abs(m_pos - this->stressSA_pos) / this->stressSA_pos > 0.1)
             this->stressSA_pos = m_pos;
-        if (std::abs(m_neg - this->stressSA_neg) > 20E6)
+        if (std::abs(m_neg - this->stressSA_neg) / this->stressSA_neg > 0.1)
             this->stressSA_neg = m_neg;
     }
 }
@@ -709,7 +690,7 @@ bool AIDMMaterial::checkCapacity(const double& Moment)
      return false;
 }
 
-double AIDMMaterial::getStressOnBackbone(const double& drift)
+double AIDMMaterial::getStressOnBackbone(const double& drift, const int& mnFactor)
 {
     auto m = drift > 0 ? m_pos : m_neg;
     auto n = drift > 0 ? n_pos : n_neg;
@@ -732,7 +713,7 @@ double AIDMMaterial::getStressOnBackbone(const double& drift)
     return drift > 0? y * capacity : -y * capacity;
 }
 
-void AIDMMaterial::setInitialK(const double iniK)
+void AIDMMaterial::setInitialK(const double iniK, bool ensureIniK)
 {
     //是否为有效单元
     if (!this->isAvailabelAIDM())
@@ -741,27 +722,27 @@ void AIDMMaterial::setInitialK(const double iniK)
         this->K = iniK; return;
     }
     //不需要硬化单元
-    if (!this->ensureIniK) return;
+    if (!ensureIniK) return;
     /*初始化调整系数*/
-    this->mnFactor = 0;
+    this->mnFactor_ = 0;
     /*用于计算初始刚度的应变*/
-    auto initial_strain_pos = backbone_inidStrainFactor * strainC_pos;
-    auto initial_strain_neg = backbone_inidStrainFactor * -strainC_neg;
+    auto initial_strain_pos = this->backbone_iniKFactor * strainC_pos;
+    auto initial_strain_neg = this->backbone_iniKFactor * -strainC_neg;
     /*刚度系数*/
     auto factorpos = 0.0;
     auto factorneg = 0.0;
     while (factorpos < 1.0 && factorneg < 1.0)
     {
         /*第一次进入 等于1*/
-        this->mnFactor += 1;
+        this->mnFactor_ += 1;
         /*计算初始刚度*/
-        auto initial_strain_K_pos = this->getStressOnBackbone(initial_strain_pos) / initial_strain_pos;
-        auto initial_strain_K_neg = this->getStressOnBackbone(initial_strain_neg) / initial_strain_neg;
+        auto initial_strain_K_pos = this->getStressOnBackbone(initial_strain_pos, this->mnFactor_) / initial_strain_pos;
+        auto initial_strain_K_neg = this->getStressOnBackbone(initial_strain_neg, this->mnFactor_) / initial_strain_neg;
         /*更新刚度系数*/
         factorpos = initial_strain_K_pos / iniK;
         factorneg = initial_strain_K_neg / iniK;
         /*设定上限值 不然将导致曲线畸形*/
-        if (mnFactor == 5) return;
+        if (this->mnFactor_ == 5) return;
     }
 }
 

@@ -1,45 +1,10 @@
- /* ****************************************************************** **
-**    OpenSees - Open System for Earthquake Engineering Simulation    **
-**          Pacific Earthquake Engineering Research Center            **
-**                                                                    **
-**                                                                    **
-** (C) Copyright 1999, The Regents of the University of California    **
-** All Rights Reserved.                                               **
-**                                                                    **
-** Commercial use of this program without express permission of the   **
-** University of California, Berkeley, is strictly prohibited.  See   **
-** file 'COPYRIGHT'  in main directory for information on usage and   **
-** redistribution,  and for a DISCLAIMER OF ALL WARRANTIES.           **
-**                                                                    **
-** Developed by:                                                      **
-**   Frank McKenna (fmckenna@ce.berkeley.edu)                         **
-**   Gregory L. Fenves (fenves@ce.berkeley.edu)                       **
-**   Filip C. Filippou (filippou@ce.berkeley.edu)                     **
-**                                                                    **
-** ****************************************************************** */
-                                                                        
-// $Revision: 1.7 $
-// $Date: 2008-08-26 16:30:55 $
-// $Source: /usr/local/cvs/OpenSees/SRC/material/uniaxial/ElasticMaterial.h,v $
-                                                                        
-                                                                        
+                                                                                                                                
 #ifndef AIDMMaterial_h
 #define AIDMMaterial_h
 
-// Written: fmk 
-// Created: 07/98
-// Revision: A
-//
-// Description: This file contains the class definition for 
-// ElasticMaterial. ElasticMaterial provides the abstraction
-// of an viscoelastic uniaxial material,
-// i.e. stress = E*strain + eta*strainrate
-
-
-#include <UniaxialMaterial.h>
 #include "KerasModelExport.h"
 
-class AIDMMaterial : public UniaxialMaterial
+class AIDMMaterial
 {
   private:
       enum class AIDMParamEnum
@@ -63,7 +28,7 @@ class AIDMMaterial : public UniaxialMaterial
       };
 
   public:
-    AIDMMaterial(const int& tag, const double& lammdaSV, const double& lammdaS, const double& lammdaT_pos);
+    AIDMMaterial(const double& lammdaSV, const double& lammdaS, const double& lammdaT_pos);
     AIDMMaterial();
     ~AIDMMaterial();
 
@@ -86,14 +51,21 @@ class AIDMMaterial : public UniaxialMaterial
      static int predict_num;
 
 public:
-    const char *getClassType(void) const {return "AIDMMaterial";};
-
     int setTrialStrain(double strain, double strainRate = 0.0); 
     int setTrial(double strain, double &stress, double &tangent, double strainRate = 0.0); 
     double getStrain(void) {return TStrain;};
     double getLammda(void) { return this->lammda; }
     double getAxialRatio(void) { return this->axialRatio; }
     int getLoadingType(void) { return this->TLoadingTag; }
+    double getInitialStrain(bool isPos) 
+    {
+        return this->getCstrain(isPos) * this->backbone_inidStrainFactor;
+    }
+    double getCstrain(bool isPos)
+    {
+        return (isPos ? this->strainC_pos : this->strainC_neg);
+    }
+
     double getStress(void);
     double getTangent(void);
     double getInitialTangent(void);
@@ -102,16 +74,7 @@ public:
     int revertToLastCommit(void);    
     int revertToStart(void);        
 
-    UniaxialMaterial *getCopy(void);
-    
-    int sendSelf(int commitTag, Channel &theChannel);  
-    int recvSelf(int commitTag, Channel &theChannel, 
-        FEM_ObjectBroker &theBroker);
-    
-    void Print(OPS_Stream &s, int flag =0);
-    
-    int setParameter(const char **argv, int argc, Parameter &param);
-    int updateParameter(int parameterID, Information &info);
+    AIDMMaterial* getCopy(void); 
 
   public:
     //设定剪跨比
@@ -121,7 +84,7 @@ public:
     //判断承载力是否越界
     bool checkCapacity(const double& Moment);
     //设定初始刚度
-    void setInitialK(const double K);
+    void setInitialK(const double K, bool ensureIniK);
     //是否为有效的AIDM对象
     bool isAvailabelAIDM() const;
     //单元是否已被杀死
@@ -129,10 +92,11 @@ public:
     void Kill();
     //重设刚度
     void ResetTrialStrain(const double& strain, const int& loadingTag);
+    //计算骨架承载力退化系数
+    double GetSoftenFactor(bool isPos);
 
   private:
-      //从骨架上计算应力
-      double getStressOnBackbone(const double& drift);
+      
       //从骨架上计算切线刚度
       void setTangentOnBackbone(const double& strain, bool loading_direct_pos);
       //计算卸载刚度
@@ -155,18 +119,20 @@ public:
       public:
           //更新骨架参数
           void updateSkeletonParams();
+          //从骨架上计算应力
+          double getStressOnBackbone(const double& drift, const int& mnFactor);
 
   private:
       //骨架曲线指向点应变系数
       double backbone_ortStrainFactor = 1.2;
-      //计算初始刚度采用的峰值应变系数
+      //弹性段（超过该段才开始更新滞回参数）
       double backbone_inidStrainFactor = 0.1;
+      //初始刚度
+      double backbone_iniKFactor = 0.05;
       //初始剪跨比
       double initialLammda = 4;
       //杀死单元的应力系数
       double killStressFactor = 0.2;
-      //是否硬化初始刚度
-      bool ensureIniK = true;
 
   private: /*力学参数*/
       //剪跨比（需要revert）
@@ -178,7 +144,7 @@ public:
       double stressSA_pos;
       double stressSA_neg;
       //形状调整系数
-      int mnFactor;
+      int mnFactor_;
 
   private: /*基本参数*/
       //面积配箍特征值

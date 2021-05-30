@@ -1,33 +1,3 @@
-/* ****************************************************************** **
-**    OpenSees - Open System for Earthquake Engineering Simulation    **
-**          Pacific Earthquake Engineering Research Center            **
-**                                                                    **
-**                                                                    **
-** (C) Copyright 1999, The Regents of the University of California    **
-** All Rights Reserved.                                               **
-**                                                                    **
-** Commercial use of this program without express permission of the   **
-** University of California, Berkeley, is strictly prohibited.  See   **
-** file 'COPYRIGHT'  in main directory for information on usage and   **
-** redistribution,  and for a DISCLAIMER OF ALL WARRANTIES.           **
-**                                                                    **
-** Developed by:                                                      **
-**   Frank McKenna (fmckenna@ce.berkeley.edu)                         **
-**   Gregory L. Fenves (fenves@ce.berkeley.edu)                       **
-**   Filip C. Filippou (filippou@ce.berkeley.edu)                     **
-**                                                                    **
-** ****************************************************************** */
-                                                                        
-// $Revision$
-// $Date$
-// $URL$
-                                                                        
-                                                                        
-// Written: fmk 11/95
-// Revised:
-//
-// Purpose: This file contains the class definition for ElasticBeam3d.
-// ElasticBeam3d is a plane frame member.
 
 #ifndef AIDMBeamColumn_h
 #define AIDMBeamColumn_h
@@ -43,8 +13,6 @@ class Information;
 class CrdTransf;
 class Response;
 class Renderer;
-class AIDMMaterial;
-class UniaxialMaterial;
 class PMMSection;
 
 class AIDMBeamColumn : public Element
@@ -106,6 +74,12 @@ private:
 	void addGeneralPartialLoad(const double& Ni, const double& Nj, const double& Pyi,
 		const double& Pyj, const double& Pzi, const double& Pzj,
 		const double& aOverL, const double& bOverL, const double& length);
+    /*设定剪跨比*/
+    void setLammda(const Vector& force_vec);
+
+private:
+    //是否硬化初始刚度
+    bool ensureIniK = true;
 
   private:
       /*通过恒在判断是否转化为弹性*/

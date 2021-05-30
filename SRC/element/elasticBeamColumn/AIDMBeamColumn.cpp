@@ -922,13 +922,13 @@ AIDMBeamColumn::addLoad(ElementalLoad* theLoad, double loadFactor)
 int
 AIDMBeamColumn::commitState()
 {
+	// Get basic deformations
+	const Vector& v = theCoordTransf->getBasicTrialDisp();
 	//Ger local resist force
 	auto& F = this->getLocalResistingForce();
 	//Calculate Shear Span
-	this->sectionI_ptr->setLammda(F, true);
-	this->sectionJ_ptr->setLammda(F, false);
-	this->sectionI_ptr->setCapacity(F, true);
-	this->sectionJ_ptr->setCapacity(F, false);
+	this->setLammda(F);
+	
 	int retVal = 0;
 	// call element commitState to do any base class stuff
 	if ((retVal = this->Element::commitState()) != 0) {
@@ -937,6 +937,10 @@ AIDMBeamColumn::commitState()
 	//AIDM CommitState
 	retVal += this->sectionI_ptr->commitState();
 	retVal += this->sectionJ_ptr->commitState();
+
+	this->sectionI_ptr->setCapacity(F, v, true);
+	this->sectionJ_ptr->setCapacity(F, v, false);
+
 	//局部向量更新
 	retVal += theCoordTransf->commitState();
 	//is load already const
@@ -954,6 +958,61 @@ AIDMBeamColumn::commitState()
 	this->sectionJ_ptr->checkCapacity(F, this->getTag(), false);
 	this->isGravityConst = true;
 	return retVal;
+}
+
+void AIDMBeamColumn::setLammda(const Vector& force_vec)
+{
+	//获得构件长度
+	double L = this->theCoordTransf->getInitialLength();
+	//获得弯矩和剪力
+	auto moment_3i = force_vec(4);
+	auto moment_2i = force_vec(5);
+	auto force_2i = force_vec(2) ;
+	auto force_3i = force_vec(1) ;
+	auto moment_3j = force_vec(10);
+	auto moment_2j = force_vec(11);
+	auto force_2j = force_vec(8);
+	auto force_3j = force_vec(7);
+	//初始化剪跨比
+	double shearSpan_3i = -1;
+	double shearSpan_2i = -1;
+	double shearSpan_3j = -1;
+	double shearSpan_2j = -1;
+	//如果绕3轴i端弯矩合法
+	if (force_2i != 0 && std::abs(moment_3i) > 1E6)
+	{
+		//剪跨长度
+		shearSpan_3i = std::abs(moment_3i / force_2i);
+		//剪跨长度大于构件长度
+		if (shearSpan_3i > 0.9 * L) shearSpan_3j = shearSpan_3i;
+	}
+	//如果绕2轴i端弯矩合法
+	if (force_3i != 0 && std::abs(moment_2i) > 1E6)
+	{
+		//剪跨长度
+		shearSpan_2i = std::abs(moment_2i / force_3i);
+		//剪跨长度大于构件长度
+		if (shearSpan_2i > 0.9 * L) shearSpan_2j = shearSpan_2i;
+	}
+	//如果绕3轴j端弯矩合法
+	if (force_2j != 0 && std::abs(moment_3j) > 1E6)
+	{
+		//剪跨长度
+		shearSpan_3j = std::max(shearSpan_3j, std::abs(moment_3j / force_2j));
+		//剪跨长度大于构件长度
+		if (shearSpan_3j > 0.9 * L) shearSpan_3i = std::max(shearSpan_3j, shearSpan_3i);
+	}
+	//如果绕2轴j端弯矩合法
+	if (force_3j != 0 && std::abs(moment_2j) > 1E6)
+	{
+		//剪跨长度
+		shearSpan_2j = std::max(shearSpan_2j, std::abs(moment_2j / force_3j));
+		//剪跨长度大于构件长度
+		if (shearSpan_2j > 0.9 * L) shearSpan_2i = std::max(shearSpan_2i, shearSpan_2j);
+	}
+	//设定剪跨
+	this->sectionI_ptr->setLammda(shearSpan_3i, shearSpan_2i);
+	this->sectionJ_ptr->setLammda(shearSpan_3j, shearSpan_2j);
 }
 
 int
@@ -985,6 +1044,8 @@ AIDMBeamColumn::update(void)
 	int retVal = theCoordTransf->update();
 	// Get basic deformations
 	const Vector& v = theCoordTransf->getBasicTrialDisp();
+	//Ger local resist force
+	auto& F = this->getLocalResistingForce();
 	//initial stiffness
 	if (!this->isInitial)
 	{
@@ -993,13 +1054,14 @@ AIDMBeamColumn::update(void)
 		//i端非铰
 		if (this->sectionI_tag_ != -1)
 			this->sectionI_ptr->setInitialK(L,
-				this->sectionJ_tag_ != -1 ? 6 : 3);
+				this->sectionJ_tag_ != -1 ? 6 : 3, this->ensureIniK);
 		if (this->sectionJ_tag_ != -1)
 			this->sectionJ_ptr->setInitialK(L,
-				this->sectionI_tag_ != -1 ? 6 : 3);
+				this->sectionI_tag_ != -1 ? 6 : 3, this->ensureIniK);
 		//完成初始化
 		this->isInitial = true;
 	}
+	//获得变形
 	retVal += this->sectionI_ptr->setTrialDeformation(v, true);
 	retVal += this->sectionJ_ptr->setTrialDeformation(v, false);
 	return retVal;

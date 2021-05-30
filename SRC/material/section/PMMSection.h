@@ -65,11 +65,11 @@ private:
 
 public:
 	//设定初始刚度
-	void setInitialK(const double& L, const int& factor);
+	void setInitialK(const double& L, const int& factor, bool ensureIniK);
 	//设定剪跨比
-	void setLammda(const Vector& force_vec, bool is_I);
+	void setLammda(const double& shearSpan3, const double& shearSpan2);
 	//设定承载力
-	void setCapacity(const Vector& force_vec, bool is_I);
+	void setCapacity(const Vector& force_vec, const Vector& deformation_vec, bool is_I);
 	//判断承载力是否越界
 	bool checkCapacity(const Vector& force_vec, const int& eleTag, bool is_I);
 	//设定变形
@@ -99,8 +99,9 @@ public:
 private:
 	//防止承载力发生显著退化（相对于无轴力下的弯矩）
 	double min_capacity_factor = 0.2;
-	//是否考虑双偏压
-	bool consider_double_bending = true;
+	//超过该强度方考虑双偏压影响
+	double double_bending_factor = 0.1;
+	
 
 private:
 	//Section Analysis
@@ -128,6 +129,8 @@ private:
 	double steel_fy_;
 	/*配筋*/
 	std::vector<int> as_vec_;
+	//是否考虑双偏压
+	bool consider_double_bending = true ;
 
 private:
 	static Vector s;
