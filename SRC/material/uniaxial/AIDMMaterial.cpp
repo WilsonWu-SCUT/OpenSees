@@ -75,7 +75,8 @@ CstrainMax(0), CstrainMin(0), CstressMaxFactor(0), CstressMinFactor(0),
 lammda(initialLammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
 afa_pos(0.0), afa_neg(0.0), isConstant(false),TLoadingDirectPos(true), mnFactor_(1),
-stressSA_pos(0), stressSA_neg(0),axialRatio(0), eta_pos(0), eta_neg(0)
+stressSA_pos(0), stressSA_neg(0),axialRatio(0), eta_pos(0), eta_neg(0), 
+dalr_sp(new DALRMaterial()), TLoadingTag(0)
 {
 }
 
@@ -87,7 +88,8 @@ CstrainMax(0), CstrainMin(0), CstressMaxFactor(0), CstressMinFactor(0),
 lammda(initialLammda), lammdaS(0.0), lammdaSV(0.0), lammdaT_pos(0.0),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
 afa_pos(0.0), afa_neg(0.0), isConstant(false), TLoadingDirectPos(true), mnFactor_(1),
-stressSA_pos(0), stressSA_neg(0), axialRatio(0), eta_pos(0), eta_neg(0)
+stressSA_pos(0), stressSA_neg(0), axialRatio(0), eta_pos(0), eta_neg(0), 
+dalr_sp(new DALRMaterial()), TLoadingTag(0)
 {
 
 }
@@ -649,6 +651,7 @@ AIDMMaterial*
 AIDMMaterial::getCopy(void)
 {
     AIDMMaterial* mat = new AIDMMaterial(this->lammdaSV, this->lammdaS, this->lammdaT_pos);
+    mat->setARK(this->dalr_sp->getARK());
     return mat;
 }
 
@@ -668,14 +671,14 @@ void AIDMMaterial::setLammda(const double& Lammda)
     }
 }
 
-void AIDMMaterial::setCapcacity(const double& m_pos, const double& m_neg, const double& axialRatio)
+void AIDMMaterial::setCapcacity(const double& m_pos, const double& m_neg, const double& axial_ratio)
 {
     if (this->stressSA_pos != 0 && this->stressSA_neg != 0)
     {
         if (!this->isValidUpdate()) return;
     }
-    auto target_AR = axialRatio < -1 ? -1 : axialRatio;
-    target_AR = target_AR > 5 ? 5 : target_AR;
+    auto target_AR = axial_ratio < -1 ? -1 : axial_ratio;
+    target_AR = target_AR > 1 ? 1 : target_AR;
     if (abs(this->axialRatio - target_AR) > 0.05)
     {
         this->axialRatio = target_AR;
@@ -735,6 +738,42 @@ double AIDMMaterial::getStressOnBackbone(const double& drift, const int& mnFacto
     auto x = abs(drift / dc);
     auto y = (m * x) / (1 + (m - (n / (n - 1))) * x + pow(x, n) / (n - 1));
     return drift > 0? y * capacity : -y * capacity;
+}
+
+double AIDMMaterial::GetALR()
+{
+    //初始状态
+    if (this->TLoadingTag == 0) return 0;
+    //峰值承载力及其对应的变形
+    auto dc = this->TLoadingDirectPos ? this->strainC_pos : -this->strainC_neg;
+    auto stressMax = this->TLoadingDirectPos ? (stressFactor_pos * stressSA_pos) :
+        (stressFactor_neg * stressSA_neg);
+    //骨架
+    if (this->TLoadingTag == 1)
+    {
+        //承载力退化
+        auto CStressFactor = this->CStress / stressMax;
+        return -this->dalr_sp->GetALROnBackbone(this->TStrain, dc, this->lammda, CStressFactor);
+    }
+    //重加载
+    else if (this->TLoadingTag == 2)
+    {
+        //最大变形点
+        auto strainMax = this->TLoadingDirectPos ? this->CstrainMax : this->CstrainMin;
+        //承载力退化
+        auto CStressFactor = this->TLoadingDirectPos ? (this->CstressMaxFactor * this->eta_pos) :
+            (this->CstressMinFactor * this->eta_neg);
+        return -this->dalr_sp->GetReloadALR(this->TStrain, dc, strainMax, this->lammda, CStressFactor);
+    }
+    else if (this->TLoadingTag == 3)
+    {
+        return -this->dalr_sp->GetUnloadALR(this->TStrain);
+    }
+    else
+    {
+        opserr << "Unknow TLoadingTag For AIDMMaterial" << endln;
+        return 0;
+    }
 }
 
 void AIDMMaterial::setInitialK(const double iniK, bool ensureIniK)

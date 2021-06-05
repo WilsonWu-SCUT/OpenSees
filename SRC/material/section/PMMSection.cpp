@@ -14,7 +14,8 @@ PMMSection* OPS_PMMSectionRC(const int& plasticSize, const int& elasticSize, con
 	int numData = 1;
 	if (OPS_GetIntInput(&numData, &tag) < 0) return 0;
 	//参数是不是满足
-	if (OPS_GetNumRemainingInputArgs() != (plasticSize - 1) &&
+	if (OPS_GetNumRemainingInputArgs() != (plasticSize - 1) && 
+		OPS_GetNumRemainingInputArgs() != (plasticSize) &&
 		OPS_GetNumRemainingInputArgs() != (elasticSize - 1)) 
 	{
 		opserr << "insufficient arguments for AIDMSection with Tag:" << tag << endln;
@@ -33,7 +34,10 @@ PMMSection* OPS_PMMSectionRC(const int& plasticSize, const int& elasticSize, con
 	double fck;
 	double fy;
 	//面积配箍系数
-	double lammdaSV_y, lammdaSV_z;
+	double lammdaSV_y = 0;
+	double lammdaSV_z = 0;
+	//轴向约束刚度
+	double ark = 0;
 
 	//尺寸
 	numData = dimention_size;
@@ -54,25 +58,37 @@ PMMSection* OPS_PMMSectionRC(const int& plasticSize, const int& elasticSize, con
 		numData = 1;
 		if (OPS_GetDoubleInput(&numData, &fck) < 0) return 0;
 		if (OPS_GetDoubleInput(&numData, &fy) < 0) return 0;
-		if (OPS_GetDoubleInput(&numData, &lammdaSV_y) < 0) return 0;
+		//梁
+		if (!isBeam)
+		{
+			if (OPS_GetDoubleInput(&numData, &lammdaSV_y) < 0) return 0;
+		}
 		if (OPS_GetDoubleInput(&numData, &lammdaSV_z) < 0) return 0;
-		return new PMMSection(tag, sec_type, dimension_vec, As_vec, isBeam,
-			fck, fy, 345, AutoMesh::SectionType::RC, lammdaSV_y, lammdaSV_z);
 		delete int_data;
+		delete double_data;
+		//创建截面
+		auto section = new PMMSection(tag, sec_type, dimension_vec, As_vec, isBeam,
+			fck, fy, 345, AutoMesh::SectionType::RC, lammdaSV_y, lammdaSV_z);
+		//如果是梁
+		if (isBeam && OPS_GetNumRemainingInputArgs() > 0)
+		{
+			if (OPS_GetDoubleInput(&numData, &ark) < 0) return 0;
+			section->setARK(ark);
+		}
+		return section;
 	}
 	else
 	{
 		numData = 1;
 		if (OPS_GetDoubleInput(&numData, &fck) < 0) return 0;
+		delete double_data;
 		return new PMMSection(tag, sec_type, dimension_vec, fck, AutoMesh::SectionType::RC);
 	}
-	delete double_data;
-	
 }
 
 void* OPS_PMMSectionRectBeam()
 {
-	return OPS_PMMSectionRC(9, 4, 1, 2, 2, true);
+	return OPS_PMMSectionRC(8, 4, 1, 2, 2, true);
 }
 
 void* OPS_PMMSectionRectColumn()
@@ -133,7 +149,7 @@ PMMSection::PMMSection(const int& tag, const int& section_type,
 	this->AIDM_2_ptr = lammdaSV_y <= 0 ? new AIDMMaterial() : new AIDMMaterial(lammdaSV_y, lammdaS, lammdaT_2_pos);
 	this->AIDM_3_ptr = lammdaSV_z <= 0 ? new AIDMMaterial() : new AIDMMaterial(lammdaSV_z, lammdaS, lammdaT_3_pos);
 	//一者不存在则不考虑双偏压
-	if (lammdaSV_y <= 0 || lammdaSV_z <= 0) this->consider_double_bending = false;
+	if (lammdaSV_y <= 0 || lammdaSV_z <= 0 || this->FRAMSection_sp_->isBeam()) this->consider_double_bending = false;
 	//设定参数
 	this->AIDM_3_ptr->setCapcacity(this->capacity_3pos_ini_, this->capacity_3neg_ini_, 0);
 	this->AIDM_3_ptr->updateSkeletonParams();
@@ -240,6 +256,11 @@ bool PMMSection::iniSection(const int& section_type, const std::vector<double> d
 	return true;
 }
 
+void PMMSection::setARK(const double& ark)
+{
+	this->AIDM_3_ptr->setARK(ark);
+}
+
 void PMMSection::setInitialK(const double& L, const int& factor, bool ensureIniK)
 {
 	/*设定初始刚度*/
@@ -275,8 +296,6 @@ void PMMSection::setCapacity(const Vector& force_vec, const Vector& deformation_
 
 	auto my = (is_I ? force_vec(4) : force_vec(10) * -1) / 1E6;
 	auto mz = (is_I ? force_vec(5) : force_vec(11) * -1) / 1E6;
-
-
 	auto P = (is_I ? -1 * force_vec(0) : force_vec(6)) / 1E3;
 
 	//计算轴压系数
@@ -285,6 +304,14 @@ void PMMSection::setCapacity(const Vector& force_vec, const Vector& deformation_
 	auto fA = this->steel_fy_ * this->section_sp_->A(AutoMesh::MatType::Steel) + Ac *
 		(P <= 0 ? this->fck_ : 0.1 * this->fck_);
 	auto axialRatio = fA == 0 ? 0 : P / fA * 1E3;
+
+	//计算约束轴压系数(仅RC梁考虑)
+	if (this->FRAMSection_sp_->isBeam())
+	{
+		auto CALR = this->AIDM_3_ptr->GetALR();
+		P += CALR * fA / 1E3;
+		axialRatio += CALR;
+	}
 
 	//初始化承载力
 	double myca_pos, myca_neg, mzca_pos, mzca_neg;
@@ -445,6 +472,7 @@ std::vector<std::string> PMMSection::getResponseStrVec(bool is_I)
 		"stress3" + descp,
 		"lammda3" + descp,
 		"AxialRatio" + descp,
+		"ConstraintAR" + descp,
 	};
 }
 
@@ -459,6 +487,7 @@ std::vector<double> PMMSection::getResponseVec()
 		this->AIDM_3_ptr->getStress(),
 		this->AIDM_3_ptr->getLammda(),
 		this->AIDM_3_ptr->getAxialRatio(),
+		this->AIDM_3_ptr->getCALR(),
 	};
 }
 

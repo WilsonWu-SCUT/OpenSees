@@ -72,6 +72,8 @@ private:
 		AutoMesh::SectionType& matType, const double& bar_fy, bool isbeam);
 
 public:
+	//设定轴向约束刚度
+	void setARK(const double& ark);
 	//设定初始刚度
 	void setInitialK(const double& L, const int& factor, bool ensureIniK);
 	//设定剪跨比

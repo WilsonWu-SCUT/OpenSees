@@ -3,6 +3,7 @@
 #define AIDMMaterial_h
 
 #include "KerasModelExport.h"
+#include "DALRMaterial.h"
 
 class AIDMMaterial
 {
@@ -65,6 +66,9 @@ public:
     {
         return (isPos ? this->strainC_pos : this->strainC_neg);
     }
+    double getCALR(void) {
+        return this->dalr_sp->GetCALR();
+    }
 
     double getStress(void);
     double getTangent(void);
@@ -77,6 +81,11 @@ public:
     AIDMMaterial* getCopy(void); 
 
   public:
+      //设定斜率
+      void setARK(const double& ark)
+      {
+          this->dalr_sp->setARK(ark);
+      }
     //设定剪跨比
      void setLammda(const double& Lammda);
      //设定承载力
@@ -124,6 +133,8 @@ public:
           void updateSkeletonParams();
           //从骨架上计算应力
           double getStressOnBackbone(const double& drift, const int& mnFactor);
+          //获得附加约束轴力
+          double GetALR();
 
   private:
       //骨架曲线指向点应变系数
@@ -220,6 +231,10 @@ public:
     bool isConstant;
     //加载模式 1: 骨架 2：重加载 3：卸载
     int TLoadingTag;
+
+    private:
+        //轴向约束恢复力模型
+        std::shared_ptr<DALRMaterial> dalr_sp;
 };
 
 
