@@ -49,6 +49,14 @@ public:
 	{
 		return this->G() * this->Jx() / L;
 	}
+	inline double EIzoverL(const double& L, const int& factor) const
+	{
+		return factor * this->Iz() * this->E() / L;
+	}
+	inline double EIyoverL(const double& L, const int& factor) const
+	{
+		return factor * this->Iy() * this->E() / L;
+	}
 
 private:
 	double A(void) const;
@@ -77,6 +85,8 @@ public:
 	//获得Response类型描述
 	std::vector<std::string> getResponseStrVec(bool is_I);
 	std::vector<double> getResponseVec();
+	//截面是否被杀死
+	bool isKill(void) const;
 
 public:
 	const Vector& getSectionDeformation(void);

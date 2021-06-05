@@ -54,7 +54,7 @@
 
 void AIDMBeamColumn::setStiffMatrix(const double& L, bool is_initial)
 {
-	//初始化
+	//初始化刚度矩阵和柔度矩阵
 	kb.Zero();
 	//两端铰接 轴向刚度 抗扭刚度 
 	if (this->sectionI_tag_ == -1 && this->sectionJ_tag_ == -1)
@@ -86,6 +86,36 @@ void AIDMBeamColumn::setStiffMatrix(const double& L, bool is_initial)
 			this->sectionI_ptr->getSectionTangent();
 		kb(1, 1) = sectionK(0, 0);
 		kb(3, 3) = sectionK(1, 1);
+	}
+	//刚度放大系数为1
+	if (this->midBeamStiffFactor == 1) return;
+	//均不铰接 组合柔度矩阵
+	if (this->sectionJ_tag_ != -1 && this->sectionI_tag_ != -1)
+	{
+		//柔度矩阵初始化
+		this->initialfb();
+		//保证正常求逆 AUDM刚度不能为0
+		for (int findex = 0; findex < 4; findex++)
+		{
+			//fb(findex, findex) = fb(findex, findex) + (kb(findex + 1, findex + 1) == 0 ? 100 : 1 / kb(findex + 1, findex + 1));
+			fb(findex, findex) = fb(findex, findex) + (1 / kb(findex + 1, findex + 1));
+		}
+		//初始化
+		combineKb.Zero();
+		//柔度矩阵求逆
+		if (fb.Solve(I, combineKb) < 0)
+		{
+			opserr << "AUDMBeamColumn::setStiffMatrix() -- could not invert flexibility\n";
+			return;
+		}
+		//重铸刚度矩阵
+		for (int kx = 0; kx < 4; kx++)
+		{
+			for (int ky = 0; ky < 4; ky++)
+			{
+				kb(kx + 1, ky + 1) = combineKb(kx, ky);
+			}
+		}
 	}
 }
 
@@ -132,6 +162,14 @@ void AIDMBeamColumn::setBasicForce(const double& L, const Vector& v)
 Matrix AIDMBeamColumn::K(12, 12);
 Vector AIDMBeamColumn::P(12);
 Matrix AIDMBeamColumn::kb(6, 6);
+Matrix AIDMBeamColumn::fb(4, 4);
+Matrix AIDMBeamColumn::I(4, 4);
+Matrix AIDMBeamColumn::combineKb(4, 4);
+Vector AIDMBeamColumn::ve(4);
+Vector AIDMBeamColumn::va(6);
+Vector AIDMBeamColumn::vai(6);
+Vector AIDMBeamColumn::vaj(6);
+Vector AIDMBeamColumn::Fe(4);
 
 void* OPS_AIDMBeamColumn(void)
 {
@@ -197,8 +235,10 @@ AIDMBeamColumn::AIDMBeamColumn(int tag, int Nd1, int Nd2,
 {
 	// allocate memory for numMaterials1d uniaxial material models
 	this->sectionI_tag_ = tag_vec[0]; this->sectionJ_tag_ = tag_vec[1];
+
 	//设定单元基本参数
 	this->initialAIDMBeamColumn(Nd1, Nd2, theTransf, rigidILength, rigidJLength);
+
 	//获得截面指针
 	auto sectionI = tag_vec[0] == -1 ? nullptr : OPS_GetSectionForceDeformation(tag_vec[0]);
 	auto sectionJ = tag_vec[1] == -1? nullptr: OPS_GetSectionForceDeformation(tag_vec[1]);
@@ -937,7 +977,16 @@ AIDMBeamColumn::commitState()
 	//AIDM CommitState
 	retVal += this->sectionI_ptr->commitState();
 	retVal += this->sectionJ_ptr->commitState();
-
+	//判断单元是否被杀死
+	if (this->sectionI_tag_ >= 0 && this->sectionI_ptr->isKill())
+	{
+		this->sectionI_tag_ = -1;
+	}
+	if (this->sectionJ_tag_ >= 0 && this->sectionJ_ptr->isKill())
+	{
+		this->sectionJ_tag_ = -1;
+	}
+	//设定构件承载力
 	this->sectionI_ptr->setCapacity(F, v, true);
 	this->sectionJ_ptr->setCapacity(F, v, false);
 
@@ -1015,6 +1064,101 @@ void AIDMBeamColumn::setLammda(const Vector& force_vec)
 	this->sectionJ_ptr->setLammda(shearSpan_3j, shearSpan_2j);
 }
 
+void AIDMBeamColumn::initialfb()
+{
+	//初始化
+	fb.Zero();
+	I.Zero();
+	//两端都有AUDM时方可求满秩的柔度矩阵
+	if (this->sectionI_tag_ >= 0 && this->sectionJ_tag_ >= 0)
+	{
+		//获得构件长度
+		double L = this->theCoordTransf->getInitialLength();
+		//刚度放大 避免构件无法满足初始刚度要求
+		fb(0, 0) = 1.0 / (this->sectionI_ptr->EIzoverL(L, 3) * this->midBeamStiffFactor);
+		fb(0, 1) = -1.0 / (this->sectionI_ptr->EIzoverL(L, 6) * this->midBeamStiffFactor);
+		fb(2, 2) = 1.0 / (this->sectionI_ptr->EIyoverL(L, 3) * this->midBeamStiffFactor);
+		fb(2, 3) = -1.0 / (this->sectionI_ptr->EIyoverL(L, 6) * this->midBeamStiffFactor);
+
+		fb(1, 1) = 1.0 / (this->sectionJ_ptr->EIzoverL(L, 3) * this->midBeamStiffFactor);
+		fb(1, 0) = -1.0 / (this->sectionJ_ptr->EIzoverL(L, 6) * this->midBeamStiffFactor);
+		fb(3, 3) = 1.0 / (this->sectionJ_ptr->EIyoverL(L, 3) * this->midBeamStiffFactor);
+		fb(3, 2) = -1.0 / (this->sectionJ_ptr->EIyoverL(L, 6) * this->midBeamStiffFactor);
+
+		I(0, 0) = 1; I(1,1) = 1; I(2, 2) = 1; I(3, 3) = 1;
+	}
+}
+
+void AIDMBeamColumn::getAUDMBasicTrialDisp(Vector& va_vec, const Vector& v)
+{
+	//初始化
+	ve.Zero(); Fe.Zero(); va_vec.Zero();
+	//获得值
+	for (int i = 0; i < 6; i++)
+		va_vec(i) = v(i);
+	//获得弯矩
+	Fe(0) = q(1);
+	Fe(1) = q(2);
+	Fe(2) = q(3);
+	Fe(3) = q(4);
+	//计算中梁的端部转角 fb * F = v
+	ve.addMatrixVector(0.0, fb, Fe, 1.0);
+	//叠加变形
+	for (int i = 0; i < 4; i++)
+	{
+		va_vec(i + 1) = va_vec(i + 1) - ve(i);
+	}
+}
+
+const Vector& AIDMBeamColumn::getAUDMBasicTrialDispByInteraction()
+{
+	// Get basic deformations
+	const Vector& v = theCoordTransf->getBasicTrialDisp();
+	//初始化柔度矩阵
+	this->initialfb();
+	//初始化
+	double L = theCoordTransf->getInitialLength();
+	// Get basic deformations
+	this->getAUDMBasicTrialDisp(vai, v);
+	//内部迭代次数
+	int interactNum = 0;
+	double firstNorm = 0;
+	//Interaction
+	while (true)
+	{
+		//获得变形
+		this->sectionI_ptr->setTrialDeformation(vai, true);
+		this->sectionJ_ptr->setTrialDeformation(vai, false);
+		//设定局部力
+		setBasicForce(L, vai);
+		//获得下一次迭代的位移
+		this->getAUDMBasicTrialDisp(vaj, v);
+		//计算增量
+		auto& dletav = vaj - vai;
+		//更新变形
+		std::swap(vai, vaj);
+		//计算范数
+		auto norm  = dletav.Norm();
+		interactNum++;
+		//满足要求
+		if (firstNorm == 0) firstNorm = norm;
+		//容差
+		if (norm < 1E-4 || norm / firstNorm < 0.01)
+		{
+			break;
+		}
+		else if (interactNum > 20)
+		{
+			opserr << "Interaction num " << interactNum << endln;
+			break;
+		}	
+	}
+	va.Zero();
+	for (int i = 0; i < 6; i++)
+		va(i) = vai(i);
+	return va;
+}
+
 int
 AIDMBeamColumn::revertToLastCommit()
 {
@@ -1043,9 +1187,9 @@ AIDMBeamColumn::update(void)
 	// Update the transformation
 	int retVal = theCoordTransf->update();
 	// Get basic deformations
-	const Vector& v = theCoordTransf->getBasicTrialDisp();
-	//Ger local resist force
-	auto& F = this->getLocalResistingForce();
+	//const Vector& v = theCoordTransf->getBasicTrialDisp();
+	const Vector& v = this->midBeamStiffFactor == 1? 
+		theCoordTransf->getBasicTrialDisp(): this->getAUDMBasicTrialDispByInteraction();
 	//initial stiffness
 	if (!this->isInitial)
 	{
@@ -1085,8 +1229,6 @@ AIDMBeamColumn::getTangentStiff(void)
 const Matrix&
 AIDMBeamColumn::getInitialStiff(void)
 {
-	//  const Vector &v = theCoordTransf->getBasicTrialDisp();
-
 	double L = theCoordTransf->getInitialLength();
 	//设定刚度
 	setStiffMatrix(L, true);

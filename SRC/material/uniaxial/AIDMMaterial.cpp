@@ -71,11 +71,11 @@ int AIDMMaterial::predict_num = 0;
 AIDMMaterial::AIDMMaterial(const double& lammdaSV, const double& lammdaS, const double& lammdaT_pos)
 :TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
 K(0), CK(0.0),
-CstrainMax(0), CstrainMin(0),
+CstrainMax(0), CstrainMin(0), CstressMaxFactor(0), CstressMinFactor(0),
 lammda(initialLammda), lammdaS(lammdaS), lammdaSV(lammdaSV), lammdaT_pos(lammdaT_pos),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
 afa_pos(0.0), afa_neg(0.0), isConstant(false),TLoadingDirectPos(true), mnFactor_(1),
-stressSA_pos(0), stressSA_neg(0),axialRatio(0)
+stressSA_pos(0), stressSA_neg(0),axialRatio(0), eta_pos(0), eta_neg(0)
 {
 }
 
@@ -83,11 +83,11 @@ stressSA_pos(0), stressSA_neg(0),axialRatio(0)
 AIDMMaterial::AIDMMaterial()
 : TStrain(0.0), CStress(0.0), TStress(0.0), CStrain(0.0),
 K(0), CK(0.0),
-CstrainMax(0), CstrainMin(0),
+CstrainMax(0), CstrainMin(0), CstressMaxFactor(0), CstressMinFactor(0),
 lammda(initialLammda), lammdaS(0.0), lammdaSV(0.0), lammdaT_pos(0.0),
 needUpdateHANN_pos(false), needUpdateHANN_neg(false), needUpdateBANN(true),
 afa_pos(0.0), afa_neg(0.0), isConstant(false), TLoadingDirectPos(true), mnFactor_(1),
-stressSA_pos(0), stressSA_neg(0), axialRatio(0)
+stressSA_pos(0), stressSA_neg(0), axialRatio(0), eta_pos(0), eta_neg(0)
 {
 
 }
@@ -134,12 +134,24 @@ AIDMMaterial::setTrialStrain(double strain, double strainRate)
     if ((TLoadingDirectPos ? strain >= max_strain : strain <= max_strain))
     {
         this->setTangentOnBackbone(strain, TLoadingDirectPos);
+
+        /*测试*/
+        if (std::abs(this->TStress) > 8E8)
+        {
+            int i = 0;
+        }
+
         return 0;
     }
     //Unloading 如果应变呈现卸载趋势（同向，绝对值小） 获得卸载刚度
     else if (abs(strain) < abs(CStrain) && CStress * CStrain > 0)
     {
         auto info  = this->setUnloadingTangent(strain);
+
+        
+
+
+
         if(info == 0) return 0;
     }
     //Reload path not created 如果没有历史最大变形 则指向骨架
@@ -150,6 +162,13 @@ AIDMMaterial::setTrialStrain(double strain, double strainRate)
     else
     {
         this->setReloadingTangent(strain, TLoadingDirectPos);
+
+        /*测试*/
+        if (std::abs(this->TStress) > 8E8)
+        {
+            int i = 0;
+        }
+
     }
 
     return 0;
@@ -327,9 +346,9 @@ void AIDMMaterial::setReloadingTangent(const double& strain, bool loading_direct
         auto reloadingA_K = loading_direct_pos ? secant_Kc * beta_pos : secant_Kc * beta_neg;
         //Reloading target strain 拐点真实应变
         auto reloadingA_strain = CStrain + (brk_prt_stress - CStress) / reloadingA_K;
-        //是否已经超过了 拐点真实应变
-        bool isStrainBeyond = loading_direct_pos ? reloadingA_strain > brk_prt_strain_max: 
-            reloadingA_strain < brk_prt_strain_max;
+        //拐点真实应变太靠后（2加载段刚度太大不允许）  当前目标应变要小于拐点真实应变
+        bool isStrainBeyond = loading_direct_pos ? (reloadingA_strain > brk_prt_strain_max || reloadingA_strain < strain):
+           ( reloadingA_strain < brk_prt_strain_max || reloadingA_strain > strain);
         //超过采用二段应变
         K = isStrainBeyond ? reloadingB_K : reloadingA_K;
     }
@@ -635,6 +654,7 @@ AIDMMaterial::getCopy(void)
 
 void AIDMMaterial::setLammda(const double& Lammda)
 {
+    if (!this->isValidUpdate()) return;
     auto target_lammda = Lammda < 0.5 ? 0.5 : Lammda;
     target_lammda = target_lammda > 5 ? 5 : target_lammda;
     if (abs(this->lammda - target_lammda) > 0.25)
@@ -650,6 +670,10 @@ void AIDMMaterial::setLammda(const double& Lammda)
 
 void AIDMMaterial::setCapcacity(const double& m_pos, const double& m_neg, const double& axialRatio)
 {
+    if (this->stressSA_pos != 0 && this->stressSA_neg != 0)
+    {
+        if (!this->isValidUpdate()) return;
+    }
     auto target_AR = axialRatio < -1 ? -1 : axialRatio;
     target_AR = target_AR > 5 ? 5 : target_AR;
     if (abs(this->axialRatio - target_AR) > 0.05)
@@ -768,4 +792,27 @@ void AIDMMaterial::Kill()
     //常刚度 且刚度为零
     this->isConstant = true;
     this->K = 0;
+}
+
+bool AIDMMaterial::isValidUpdate()
+{
+    //如果还未超过最大变形
+    if (this->TLoadingDirectPos ? (CstrainMax == 0) : (CstrainMin == 0))
+        return false;
+    //变形是否合法
+    auto max_strain = this->TLoadingDirectPos ? CstrainMax : CstrainMin;
+    auto limit_strain = max_strain * this->updateDeformationFactor;
+    //变形是否超过限值
+    if (this->TLoadingDirectPos ? (this->TStrain < limit_strain) : (this->TStrain > limit_strain))
+        return false;
+    //最大变形对应的应力
+    auto max_stress = this->TLoadingDirectPos ? CstressMaxFactor * stressFactor_pos * stressSA_pos :
+        CstressMinFactor * stressFactor_neg * stressSA_neg;
+    //oriented point capacity 指向点应力
+    auto oreinted_prt_stress = max_stress * (this->TLoadingDirectPos ? eta_pos : eta_neg);
+    auto limit_stress = oreinted_prt_stress * this->updateForceFactor;
+    //判断承载力是否超过更新限值
+    if(this->TLoadingDirectPos ? (this->TStress < limit_stress) : (this->TStress > limit_stress))
+        return false;
+    return true;
 }

@@ -76,10 +76,17 @@ private:
 		const double& aOverL, const double& bOverL, const double& length);
     /*设定剪跨比*/
     void setLammda(const Vector& force_vec);
+    /*初始化柔度矩阵*/
+    void initialfb();
+    /*获得AUDM变形矩阵*/
+    void getAUDMBasicTrialDisp(Vector& va_vec, const Vector& v);
+    const Vector& getAUDMBasicTrialDispByInteraction();
 
 private:
     //是否硬化初始刚度
     bool ensureIniK = true;
+    //中梁刚度放大系数
+    int midBeamStiffFactor = 1;
 
   private:
       /*通过恒在判断是否转化为弹性*/
@@ -100,6 +107,21 @@ private:
     static Vector P;
     Vector Q;
     
+    //柔度矩阵
+    static Matrix fb;
+    //单位矩阵
+    static Matrix I;
+    //组合刚度矩阵
+    static Matrix combineKb;
+    //中梁外力向量
+    static Vector Fe;
+    //中梁变形
+    static Vector ve;
+    //AUDM变形
+    static Vector va;
+    static Vector vai;
+    static Vector vaj;
+
     static Matrix kb;
 
     Vector q;

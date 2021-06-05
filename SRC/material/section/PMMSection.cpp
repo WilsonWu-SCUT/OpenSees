@@ -462,6 +462,11 @@ std::vector<double> PMMSection::getResponseVec()
 	};
 }
 
+bool PMMSection::isKill(void) const
+{
+	return this->AIDM_2_ptr->isKill() || this->AIDM_3_ptr->isKill();
+}
+
 SectionForceDeformation* PMMSection::getCopy(void)
 {
 	//≥ı ºªØ

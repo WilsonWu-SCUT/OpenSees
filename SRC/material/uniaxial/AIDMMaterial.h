@@ -115,6 +115,9 @@ public:
       std::vector<float> getComponentParamsVec(bool is_pos);
       //更新滞回参数
       void updateHystereticParams(bool is_pos);
+      //是否需要更新剪跨或轴压系数
+      bool isValidUpdate();
+
 
       public:
           //更新骨架参数
@@ -132,7 +135,11 @@ public:
       //初始剪跨比
       double initialLammda = 4;
       //杀死单元的应力系数
-      double killStressFactor = 0.2;
+      double killStressFactor = 0.1;
+      //更新剪跨比 轴压系数的变形边界
+      double updateDeformationFactor = 0.5;
+      //更新剪跨比 轴压系数的承载力边界
+      double updateForceFactor = 0.5;
 
   private: /*力学参数*/
       //剪跨比（需要revert）
