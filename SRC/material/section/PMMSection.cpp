@@ -45,7 +45,14 @@ PMMSection* OPS_PMMSectionRC(const int& plasticSize, const int& elasticSize, con
 	//读取尺寸信息
 	if (OPS_GetDoubleInput(&numData, &double_data[0]) < 0) return 0;
 	//读取尺寸信息
-	for(int i = 0; i < dimention_size; i++) dimension_vec.push_back(double_data[i]);
+	for (int i = 0; i < dimention_size; i++)
+	{
+		if(isBeam && i == 1 && sec_type == 29)
+		{
+			dimension_vec.push_back(-double_data[i]);
+		}
+		else  dimension_vec.push_back(double_data[i]);
+	}
 	//是否塑性
 	if (isPlastic)
 	{
@@ -53,7 +60,8 @@ PMMSection* OPS_PMMSectionRC(const int& plasticSize, const int& elasticSize, con
 		numData = as_size;
 		int* int_data = new int[as_size + 1];
 		if (OPS_GetIntInput(&numData, &int_data[0]) < 0) return 0;
-		for (int i = 0; i < as_size; i++) As_vec.push_back(int_data[i]);
+		for (int i = 0; i < as_size; i++)
+				As_vec.push_back(int_data[i]);
 		//材料强度
 		numData = 1;
 		if (OPS_GetDoubleInput(&numData, &fck) < 0) return 0;
@@ -73,7 +81,13 @@ PMMSection* OPS_PMMSectionRC(const int& plasticSize, const int& elasticSize, con
 		if (isBeam && OPS_GetNumRemainingInputArgs() > 0)
 		{
 			if (OPS_GetDoubleInput(&numData, &ark) < 0) return 0;
-			section->setARK(ark);
+			//如果为T形梁
+			if (sec_type == 29)
+			{
+				auto Arect = std::abs(dimension_vec[0] * dimension_vec[1]);
+				section->setARK(ark, Arect);
+			}
+			else section->setARK(ark, -1);
 		}
 		return section;
 	}
@@ -101,7 +115,10 @@ void* OPS_PMMSectionCirColumn()
 	return OPS_PMMSectionRC(7, 3, 3, 1, 1, false);
 }
 
-
+void* OPS_PMMSectionTBeam()
+{
+	return OPS_PMMSectionRC(10, 6, 29, 4, 2, true);
+}
 
 PMMSection::PMMSection()
 	:SectionForceDeformation(0, SEC_TAG_PMMSection), 
@@ -256,9 +273,16 @@ bool PMMSection::iniSection(const int& section_type, const std::vector<double> d
 	return true;
 }
 
-void PMMSection::setARK(const double& ark)
+void PMMSection::setARK(const double& ark, const double& ARect)
 {
-	this->AIDM_3_ptr->setARK(ark);
+	if (ARect > 0)
+	{
+		auto Ac = this->section_sp_->A(AutoMesh::MatType::Concrete) +
+			this->section_sp_->A(AutoMesh::MatType::CoverConcrete);
+		auto factor = Ac == 0 ? 1.0 : ARect / Ac;
+		this->AIDM_3_ptr->setARK(ark, factor);
+	}
+	else this->AIDM_3_ptr->setARK(ark, 1.0);
 }
 
 void PMMSection::setInitialK(const double& L, const int& factor, bool ensureIniK)

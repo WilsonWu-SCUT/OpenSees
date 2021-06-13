@@ -3,7 +3,7 @@
 #include <cmath>
 
 DALRMaterial::DALRMaterial()
-	:Cstrain(0), CALR(0), ARK(0)
+	:Cstrain(0), CALR(0), ARK(0), ReductFactor(1.0)
 {
 
 }
@@ -16,18 +16,22 @@ DALRMaterial::~DALRMaterial()
 double DALRMaterial::GetALROnBackbone(const double& TStrain, const double& dc,
 	const double& lammda, const double& CStressFactor)
 {
-	//更新变形
-	this->Cstrain = TStrain;
-	//判断变形与峰值变形反号
-	if (TStrain * dc <= 0 || this->ARK < 0)
+		//判断变形与峰值变形反号
+	if(this->ARK < 0)  this->CALR = 0;
+	//第一次反向加载可能出现
+	else if (TStrain * dc <= 0)
 	{
-		this->CALR = 0;
+		//不做事
 	}
 	//未超过峰值承载力对应变形
 	else if (std::abs(TStrain) < std::abs(dc))
 	{
-		this->CALR = std::abs(TStrain) * this->GetInitialK(lammda);
-		
+		auto oriented_strain = dc;
+		auto oriented_ALR = this->GetALRMax(lammda, dc);
+		auto slope = (oriented_ALR - this->CALR) / (oriented_strain - this->Cstrain);
+		this->CALR = slope * (TStrain - this->Cstrain) + this->CALR;
+		//auto calr = std::abs(TStrain) * this->GetInitialK(lammda);
+		//if (this->CALR < calr) this->CALR = calr;
 	}
 	//超过峰值承载力对应变形
 	else
@@ -35,7 +39,10 @@ double DALRMaterial::GetALROnBackbone(const double& TStrain, const double& dc,
 		auto ALRMax = this->GetALRMax(lammda, dc);
 		this->CALR = ALRMax * std::abs(CStressFactor);
 	}
-	return this->CALR;
+	//更新变形
+	this->Cstrain = TStrain;
+	//返回约束周亚系数
+	return this->CALR * this->ReductFactor;
 }
 
 double DALRMaterial::GetUnloadALR(const double& TStrain)
@@ -51,7 +58,7 @@ double DALRMaterial::GetUnloadALR(const double& TStrain)
 		this->CALR = this->CALR / this->Cstrain * TStrain;
 		this->Cstrain = TStrain;
 	}
-	return this->CALR;
+	return this->CALR * this->ReductFactor;
 }
 
 double DALRMaterial::GetReloadALR(const double& TStrain, const double& dc, const double& strainMax,
@@ -69,8 +76,13 @@ double DALRMaterial::GetReloadALR(const double& TStrain, const double& dc, const
 		auto oriented_ALR = this->GetALRMax(lammda, dc);
 		auto slope = (oriented_ALR - this->CALR) / (oriented_strain - this->Cstrain);
 		this->CALR = slope * (TStrain - this->Cstrain) + this->CALR;
+		//计算线性段
+		//auto calr = std::abs(TStrain) * this->GetInitialK(lammda);
+		//判断是否超过
+		//if (this->CALR < calr) this->CALR = calr;
 		this->Cstrain = TStrain;
 	}
+	//超过峰值
 	else
 	{
 		auto oriented_strain = strainMax;
@@ -79,7 +91,7 @@ double DALRMaterial::GetReloadALR(const double& TStrain, const double& dc, const
 		this->CALR = slope * (TStrain - this->Cstrain) + this->CALR;
 		this->Cstrain = TStrain;
 	}
-	return this->CALR;
+	return this->CALR * this->ReductFactor;
 }
 
 double DALRMaterial::GetInitialK(const double& lammda)

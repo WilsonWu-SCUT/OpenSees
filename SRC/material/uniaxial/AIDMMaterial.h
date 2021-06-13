@@ -82,9 +82,10 @@ public:
 
   public:
       //设定斜率
-      void setARK(const double& ark)
+      void setARK(const double& ark, const double& factor)
       {
           this->dalr_sp->setARK(ark);
+          this->dalr_sp->setFactor(factor);
       }
     //设定剪跨比
      void setLammda(const double& Lammda);

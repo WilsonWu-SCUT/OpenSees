@@ -125,6 +125,7 @@ extern void *OPS_ParallelSection(void);
 extern void* OPS_PMMSectionRectBeam(void); //Wilson
 extern void* OPS_PMMSectionRectColumn(void);//Wilson
 extern void* OPS_PMMSectionCirColumn(void);//Wilson
+extern void* OPS_PMMSectionTBeam(void);//Wilson
 
 
 int
@@ -201,6 +202,13 @@ TclModelBuilderSectionCommand (ClientData clientData, Tcl_Interp *interp, int ar
 	}
 	else if (strcmp(argv[1], "AUDMSectionCirColumn") == 0) {
 		void* theMat = OPS_PMMSectionCirColumn();
+		if (theMat != 0)
+			theSection = (SectionForceDeformation*)theMat;
+		else
+			return TCL_ERROR;
+	}
+	else if (strcmp(argv[1], "AUDMSectionTBeam") == 0) {
+		void* theMat = OPS_PMMSectionTBeam();
 		if (theMat != 0)
 			theSection = (SectionForceDeformation*)theMat;
 		else

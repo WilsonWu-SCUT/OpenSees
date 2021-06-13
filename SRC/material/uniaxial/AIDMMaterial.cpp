@@ -651,7 +651,7 @@ AIDMMaterial*
 AIDMMaterial::getCopy(void)
 {
     AIDMMaterial* mat = new AIDMMaterial(this->lammdaSV, this->lammdaS, this->lammdaT_pos);
-    mat->setARK(this->dalr_sp->getARK());
+    mat->setARK(this->dalr_sp->getARK(), this->dalr_sp->getFactor());
     return mat;
 }
 
@@ -693,9 +693,9 @@ void AIDMMaterial::setCapcacity(const double& m_pos, const double& m_neg, const 
     }
     else
     {
-        if (std::abs(m_pos - this->stressSA_pos) / this->stressSA_pos > 0.1)
+        if (std::abs(m_pos - this->stressSA_pos) / this->stressSA_pos > 0.05)
             this->stressSA_pos = m_pos;
-        if (std::abs(m_neg - this->stressSA_neg) / this->stressSA_neg > 0.1)
+        if (std::abs(m_neg - this->stressSA_neg) / this->stressSA_neg > 0.05)
             this->stressSA_neg = m_neg;
     }
 }
@@ -842,8 +842,7 @@ bool AIDMMaterial::isValidUpdate()
     auto max_strain = this->TLoadingDirectPos ? CstrainMax : CstrainMin;
     auto limit_strain = max_strain * this->updateDeformationFactor;
     //变形是否超过限值
-    if (this->TLoadingDirectPos ? (this->TStrain < limit_strain) : (this->TStrain > limit_strain))
-        return false;
+    bool isStrainOut = this->TLoadingDirectPos ? (this->TStrain > limit_strain) : (this->TStrain < limit_strain);
     //最大变形对应的应力
     auto max_stress = this->TLoadingDirectPos ? CstressMaxFactor * stressFactor_pos * stressSA_pos :
         CstressMinFactor * stressFactor_neg * stressSA_neg;
@@ -851,7 +850,6 @@ bool AIDMMaterial::isValidUpdate()
     auto oreinted_prt_stress = max_stress * (this->TLoadingDirectPos ? eta_pos : eta_neg);
     auto limit_stress = oreinted_prt_stress * this->updateForceFactor;
     //判断承载力是否超过更新限值
-    if(this->TLoadingDirectPos ? (this->TStress < limit_stress) : (this->TStress > limit_stress))
-        return false;
-    return true;
+    bool isForceOut = this->TLoadingDirectPos ? (this->TStress > limit_stress) : (this->TStress < limit_stress);
+    return isStrainOut || isForceOut;
 }
