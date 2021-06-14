@@ -37,7 +37,7 @@ PMMSection* OPS_PMMSectionRC(const int& plasticSize, const int& elasticSize, con
 	double lammdaSV_y = 0;
 	double lammdaSV_z = 0;
 	//轴向约束刚度
-	double ark = 0;
+	int ark = 0;
 
 	//尺寸
 	numData = dimention_size;
@@ -80,7 +80,7 @@ PMMSection* OPS_PMMSectionRC(const int& plasticSize, const int& elasticSize, con
 		//如果是梁
 		if (isBeam && OPS_GetNumRemainingInputArgs() > 0)
 		{
-			if (OPS_GetDoubleInput(&numData, &ark) < 0) return 0;
+			if (OPS_GetIntInput(&numData, &ark) < 0) return 0;
 			//如果为T形梁
 			if (sec_type == 29)
 			{
@@ -273,7 +273,7 @@ bool PMMSection::iniSection(const int& section_type, const std::vector<double> d
 	return true;
 }
 
-void PMMSection::setARK(const double& ark, const double& ARect)
+void PMMSection::setARK(const int& ark, const double& ARect)
 {
 	if (ARect > 0)
 	{

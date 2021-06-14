@@ -82,7 +82,7 @@ public:
 
   public:
       //Éè¶¨Ð±ÂÊ
-      void setARK(const double& ark, const double& factor)
+      void setARK(const int& ark, const double& factor)
       {
           this->dalr_sp->setARK(ark);
           this->dalr_sp->setFactor(factor);

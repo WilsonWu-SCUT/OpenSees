@@ -136,24 +136,12 @@ AIDMMaterial::setTrialStrain(double strain, double strainRate)
     if ((TLoadingDirectPos ? strain >= max_strain : strain <= max_strain))
     {
         this->setTangentOnBackbone(strain, TLoadingDirectPos);
-
-        /*测试*/
-        if (std::abs(this->TStress) > 8E8)
-        {
-            int i = 0;
-        }
-
         return 0;
     }
     //Unloading 如果应变呈现卸载趋势（同向，绝对值小） 获得卸载刚度
     else if (abs(strain) < abs(CStrain) && CStress * CStrain > 0)
     {
         auto info  = this->setUnloadingTangent(strain);
-
-        
-
-
-
         if(info == 0) return 0;
     }
     //Reload path not created 如果没有历史最大变形 则指向骨架
@@ -164,13 +152,6 @@ AIDMMaterial::setTrialStrain(double strain, double strainRate)
     else
     {
         this->setReloadingTangent(strain, TLoadingDirectPos);
-
-        /*测试*/
-        if (std::abs(this->TStress) > 8E8)
-        {
-            int i = 0;
-        }
-
     }
 
     return 0;
@@ -230,7 +211,7 @@ void AIDMMaterial::setTangentOnBackbone(const double& strain, bool loading_direc
             oriented_strain : this->CStrain * backbone_ortStrainFactor;
         auto strainmax = loading_direct_pos ? this->CstrainMax : this->CstrainMin;
         //判断指向的位移（离最大变形值太远 则仍走重加载路线）
-        if (std::abs(oriented_strain) < std::abs(strainmax)) 
+        if (std::abs(strain) < std::abs(strainmax) && std::abs(oriented_strain) < std::abs(strainmax))
             return;
     }
     //更新加载模式
@@ -657,7 +638,10 @@ AIDMMaterial::getCopy(void)
 
 void AIDMMaterial::setLammda(const double& Lammda)
 {
-    if (!this->isValidUpdate()) return;
+    if (this->lammda != this->initialLammda)
+    {
+        if (!this->isValidUpdate()) return;
+    }
     auto target_lammda = Lammda < 0.5 ? 0.5 : Lammda;
     target_lammda = target_lammda > 5 ? 5 : target_lammda;
     if (abs(this->lammda - target_lammda) > 0.25)

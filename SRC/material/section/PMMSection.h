@@ -73,7 +73,7 @@ private:
 
 public:
 	//设定轴向约束刚度
-	void setARK(const double& ark, const double& ARect);
+	void setARK(const int& ark, const double& ARect);
 	//设定初始刚度
 	void setInitialK(const double& L, const int& factor, bool ensureIniK);
 	//设定剪跨比

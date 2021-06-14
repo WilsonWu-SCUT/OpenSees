@@ -21,10 +21,10 @@ public:
         return -this->CALR * this->ReductFactor;
     }
     //设定初始刚度
-    void setARK(const double& ark) { this->ARK = ark; }
+    void setARK(const int& ark) { this->ARK = ark; }
     //设定折减系数
     void setFactor(const double& factor) { this->ReductFactor = factor; }
-    double getARK(void) { return this->ARK; }
+    int getARK(void) { return this->ARK; }
     double getFactor(void) { return this->ReductFactor; }
 
 private:
@@ -38,7 +38,7 @@ private:
     //轴压系数
     double CALR;
     //初始刚度
-    double ARK;
+    int ARK;
     //轴压折减系数 考虑翼缘
     double ReductFactor;
 };

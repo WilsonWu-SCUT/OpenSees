@@ -17,7 +17,7 @@ double DALRMaterial::GetALROnBackbone(const double& TStrain, const double& dc,
 	const double& lammda, const double& CStressFactor)
 {
 		//判断变形与峰值变形反号
-	if(this->ARK < 0)  this->CALR = 0;
+	if(this->ARK == 0)  this->CALR = 0;
 	//第一次反向加载可能出现
 	else if (TStrain * dc <= 0)
 	{
@@ -30,8 +30,6 @@ double DALRMaterial::GetALROnBackbone(const double& TStrain, const double& dc,
 		auto oriented_ALR = this->GetALRMax(lammda, dc);
 		auto slope = (oriented_ALR - this->CALR) / (oriented_strain - this->Cstrain);
 		this->CALR = slope * (TStrain - this->Cstrain) + this->CALR;
-		//auto calr = std::abs(TStrain) * this->GetInitialK(lammda);
-		//if (this->CALR < calr) this->CALR = calr;
 	}
 	//超过峰值承载力对应变形
 	else
@@ -48,7 +46,7 @@ double DALRMaterial::GetALROnBackbone(const double& TStrain, const double& dc,
 double DALRMaterial::GetUnloadALR(const double& TStrain)
 {
 	//判断变形与Cstrain反号
-	if (TStrain * this->Cstrain <= 0 || this->ARK < 0)
+	if (TStrain * this->Cstrain <= 0 || this->ARK == 0)
 	{
 		this->Cstrain = TStrain;
 		this->CALR = 0;
@@ -65,7 +63,7 @@ double DALRMaterial::GetReloadALR(const double& TStrain, const double& dc, const
 	const double& lammda, const double& CStressFactor)
 {
 	//是否和最大变形点同向
-	if (TStrain * strainMax <= 0 || this->ARK < 0)
+	if (TStrain * strainMax <= 0 || this->ARK == 0)
 	{
 		this->Cstrain = TStrain;
 	}
@@ -98,8 +96,9 @@ double DALRMaterial::GetInitialK(const double& lammda)
 {
 	auto a = -lammda * 2E-5 - 1E-5;
 	auto b = lammda >= 1 ? 0.023 * std::log(lammda) + 0.017: 0.017;
-	auto xmax = this->ARK <= 0 ? -0.5 * b / a : this->ARK;
-	auto k = a * std::pow(xmax, 2) + b * xmax;
+	auto xmax = -0.5 * b / a;
+	auto x = this->ARK <= 0 || this->ARK > xmax ? xmax : this->ARK;
+	auto k = a * std::pow(x, 2) + b * x;
 	return k;
 }
 
