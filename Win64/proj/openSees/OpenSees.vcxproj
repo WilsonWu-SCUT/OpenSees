@@ -283,6 +283,7 @@
       </DataExecutionPrevention>
       <Version>
       </Version>
+      <DelayLoadDLLs>AUTOMESH2D_2012_DLL.dll;AUTOMESH2D_DEN_DLL.dll;automesh2dui.dll;AutoMeshNet.dll;DeDomain.dll;libifcoremd.dll;libmmd.dll;lpsolve55.dll;mesquite.dll;QuadOptimization.dll;shapelib.dll;svml_dispmd.dll;Verdict.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
     <BuildLog>
       <Path>.\..\..\obj\opensees\debug\$(MSBuildProjectName).log</Path>
@@ -347,6 +348,7 @@
       <OutputFile>.\..\..\bin\OpenSees.exe</OutputFile>
       <AdditionalLibraryDirectories>c:\ActiveTcl\lib;..\..\lib_2019\release;..\..\lib\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>actor.lib;analysis.lib;arpack.lib;blas.lib;cblas.lib;convergence.lib;cssparse.lib;damage.lib;database.lib;DoddRestrepo.lib;domain.lib;drain.lib;element.lib;feap.lib;fedeas.lib;glu32.lib;graph.lib;handler.lib;ifconsol.lib;lapack.lib;libifcoremt.lib;libmmt.lib;material.lib;matrix.lib;modelbuilder.lib;opengl32.lib;optimization.lib;recorder.lib;reliability.lib;renderer.lib;sdmuc.lib;superLU.lib;system.lib;tagged.lib;tcl.lib;tcl86t.lib;tk86t.lib;umfpackC.lib;utility.lib;wsock32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>AUTOMESH2D_2012_DLL.dll;AUTOMESH2D_DEN_DLL.dll;automesh2dui.dll;AutoMeshNet.dll;DeDomain.dll;libifcoremd.dll;libmmd.dll;lpsolve55.dll;mesquite.dll;QuadOptimization.dll;shapelib.dll;svml_dispmd.dll;Verdict.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

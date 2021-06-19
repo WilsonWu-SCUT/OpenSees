@@ -242,9 +242,18 @@ void AIDMMaterial::setTangentOnBackbone(const double& strain, bool loading_direc
     //软化段、残余应力越界、负刚度 则认为构件可以被杀死
     if (K < 0 && isPost && isStressBelow)
     {
-        K = 0;
-        TStress = 0;
+        if (this->needToKill)
+        {
+            K = 0;
+            TStress = 0;
+        }
+        else
+        {
+            TStress = (TStress < 0 ? -1 : 1) * backboneMaxStress * this->killStressFactor;
+            K = (TStress - stress0) / (TStrain - strain0);
+        }
     }
+    
 }
 
 int AIDMMaterial::setUnloadingTangent(const double& strain)
@@ -812,6 +821,8 @@ void AIDMMaterial::Kill()
 {
     //是否为有效的AIDM
     if (!this->isAvailabelAIDM()) return;
+    //不需要被杀死
+    if (!this->needToKill) return;
     //常刚度 且刚度为零
     this->isConstant = true;
     this->K = 0;

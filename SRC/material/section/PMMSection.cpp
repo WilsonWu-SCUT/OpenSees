@@ -127,7 +127,9 @@ PMMSection::PMMSection()
 	sectionHeight_3_(0), sectionHeight_2_(0),
 	capacity_3pos_ini_(0), capacity_3neg_ini_(0),
 	capacity_2pos_ini_(0), capacity_2neg_ini_(0),
-	fck_(0), steel_fy_(0)
+	fck_(0), steel_fy_(0),
+	A_(0), Iy_(0), Iz_(0), E_(0), G_(0), Jx_(0)
+
 {
 	//初始化指针
 	this->AIDM_2_ptr = new AIDMMaterial();
@@ -144,7 +146,8 @@ PMMSection::PMMSection(const int& tag, const int& section_type,
 	sectionHeight_3_(0), sectionHeight_2_(0),
 	capacity_3pos_ini_(0), capacity_3neg_ini_(0),
 	capacity_2pos_ini_(0), capacity_2neg_ini_(0),
-	fck_(fck), steel_fy_(steel_fy), as_vec_(0)
+	fck_(fck), steel_fy_(steel_fy), as_vec_(0),
+	A_(0), Iy_(0), Iz_(0), E_(0), G_(0), Jx_(0)
 {
 	//初始化截面
 	this->as_vec_ = As_vec;
@@ -172,7 +175,12 @@ PMMSection::PMMSection(const int& tag, const int& section_type,
 	this->AIDM_3_ptr->updateSkeletonParams();
 	this->AIDM_2_ptr->setCapcacity(this->capacity_2pos_ini_, this->capacity_2neg_ini_, 0);
 	this->AIDM_2_ptr->updateSkeletonParams();
-	
+	//输过是柱 不杀死
+	//if (!this->FRAMSection_sp_->isBeam())
+	//{
+	//	this->AIDM_2_ptr->NotKill();
+	//	this->AIDM_3_ptr->NotKill();
+	//}
 }
 
 PMMSection::PMMSection(const int& tag, const int& section_type,
@@ -183,7 +191,8 @@ PMMSection::PMMSection(const int& tag, const int& section_type,
 	sectionHeight_3_(0), sectionHeight_2_(0),
 	capacity_3pos_ini_(0), capacity_3neg_ini_(0),
 	capacity_2pos_ini_(0), capacity_2neg_ini_(0),
-	fck_(30), steel_fy_(345), as_vec_(0)
+	fck_(30), steel_fy_(345), as_vec_(0),
+	A_(0), Iy_(0), Iz_(0), E_(0), G_(0), Jx_(0)
 {
 	//初始化
 	this->as_vec_ = {};
@@ -212,7 +221,8 @@ PMMSection::PMMSection(const int& tag)
 	sectionHeight_3_(0), sectionHeight_2_(0),
 	capacity_3pos_ini_(0), capacity_3neg_ini_(0),
 	capacity_2pos_ini_(0), capacity_2neg_ini_(0),
-	fck_(0), steel_fy_(0), as_vec_(0)
+	fck_(0), steel_fy_(0), as_vec_(0),
+	A_(0), Iy_(0), Iz_(0), E_(0), G_(0), Jx_(0)
 {
 	//初始化
 	this->as_vec_ = {};
@@ -270,6 +280,8 @@ bool PMMSection::iniSection(const int& section_type, const std::vector<double> d
 			this->section_sp_->add_reinforced_bar(as_pos_vec[i]->get_x(),
 				as_pos_vec[i]->get_y(), as_A_vec[i], bar_fy);
 	}
+	//设定截面参数
+	this->SetSectionBaicsInfo();
 	return true;
 }
 
@@ -288,11 +300,21 @@ void PMMSection::setARK(const int& ark, const double& ARect)
 void PMMSection::setInitialK(const double& L, const int& factor, bool ensureIniK)
 {
 	/*设定初始刚度*/
-	auto initial_K2 = this->E() * this->Iz() * factor / L;
-	auto initial_K3 = this->E() * this->Iy() * factor / L;
+	auto initial_K2 = this->E_ * this->Iz_ * factor / L;
+	auto initial_K3 = this->E_ * this->Iy_ * factor / L;
 	//调整初始刚度
 	this->AIDM_2_ptr->setInitialK(initial_K2, ensureIniK);
 	this->AIDM_3_ptr->setInitialK(initial_K3, ensureIniK);
+}
+
+void PMMSection::SetSectionBaicsInfo()
+{
+	this->A_ = this->section_sp_->A();
+	this->Iy_ = this->section_sp_->Iy();
+	this->Iz_ = this->section_sp_->Iz();
+	this->E_ = this->section_sp_->E();
+	this->G_ = this->E_ * 0.4;
+	this->Jx_ = this->Iy_ + this->Iz_;
 }
 
 void PMMSection::setLammda(const double& shearSpan3, const double& shearSpan2)
@@ -539,6 +561,8 @@ SectionForceDeformation* PMMSection::getCopy(void)
 	section->fck_ = this->fck_;
 	section->steel_fy_ = this->steel_fy_;
 	section->consider_double_bending = this->consider_double_bending;
+	//截面参数
+	section->SetSectionBaicsInfo();
 
 	//重构AIDM指针
 	section->AIDM_2_ptr = (AIDMMaterial*)this->AIDM_2_ptr->getCopy();
@@ -548,42 +572,15 @@ SectionForceDeformation* PMMSection::getCopy(void)
 	section->AIDM_2_ptr->setCapcacity(this->capacity_2pos_ini_, this->capacity_2neg_ini_, 0);
 	section->AIDM_2_ptr->updateSkeletonParams();
 
+	//输过是柱 不杀死
+	//if (!this->FRAMSection_sp_->isBeam())
+	//{
+	//	section->AIDM_2_ptr->NotKill();
+	//	section->AIDM_3_ptr->NotKill();
+	//}
+
 	return section;
 }
-
-#pragma region Section basic information
-
-double PMMSection::A(void) const
-{
-	return this->section_sp_->A();
-}
-
-double PMMSection::Iy(void) const
-{
-	return this->section_sp_->Iy();
-}
-
-double PMMSection::Iz(void) const
-{
-	return this->section_sp_->Iz();
-}
-
-double PMMSection::E(void) const
-{
-	return this->section_sp_->E();
-}
-
-double PMMSection::Jx(void) const
-{
-	return this->Iy() + this->Iz();
-}
-
-double PMMSection::G(void) const
-{
-	return  0.4 * this->E();
-}
-
-#pragma endregion
 
 #pragma region unavailable
 

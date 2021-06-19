@@ -77,6 +77,9 @@ extern void		XtToolkitInitialize _ANSI_ARGS_((void));
 extern int		Tclxttest_Init _ANSI_ARGS_((Tcl_Interp *interp));
 #endif
 
+#include <windows.h>
+#include <functional>
+
 
 /*
  *----------------------------------------------------------------------
@@ -134,6 +137,40 @@ main(int argc, char **argv)
 #ifdef TCL_LOCAL_MAIN_HOOK
     TCL_LOCAL_MAIN_HOOK(&argc, &argv);
 #endif
+
+    char path[MAX_PATH]{ 0 };
+    GetModuleFileName(NULL, path, MAX_PATH);
+    // 获取当前模块全路径
+    std::string strPath;
+    strPath.resize(MAX_PATH);
+    strPath.resize(GetModuleFileName(NULL, &strPath[0], (DWORD)strPath.size()));
+    //获得文件夹名
+    std::string directory;
+    const size_t last_slash_idx = strPath.rfind('\\');
+    if (std::string::npos != last_slash_idx)
+    {
+        directory = strPath.substr(0, last_slash_idx);
+    }
+    //加载dll
+    std::function<void(std::string&, const std::string&)> dllAssemble = [](std::string & directName, const std::string & dllName){
+        auto path = directName + "\\AUTOMESH\\" + dllName + ".dll";
+        LoadLibraryEx(path.c_str(), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    };
+    //加载dll
+    dllAssemble(directory, "Verdict"); dllAssemble(directory, "svml_dispmd");
+    dllAssemble(directory, "pthreadVC2");
+    dllAssemble(directory, "nglib");
+    dllAssemble(directory, "shapelib"); 
+    dllAssemble(directory, "libmmd");
+    dllAssemble(directory, "libifcoremd");
+    dllAssemble(directory, "libifportmd");
+    dllAssemble(directory, "QuadOptimization");
+    dllAssemble(directory, "mesquite"); dllAssemble(directory, "lpsolve55");
+    dllAssemble(directory, "Geo"); dllAssemble(directory, "DeDomain");
+    dllAssemble(directory, "AUTOMESH2D_DEN_DLL"); dllAssemble(directory, "AUTOMESH2D_2012_DLL");
+    dllAssemble(directory, "automesh2dclass");
+    dllAssemble(directory, "automesh2dui");
+
 
     g3TclMain(argc, argv, TCL_LOCAL_APPINIT, 0, 1);
 

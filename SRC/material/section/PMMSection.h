@@ -43,33 +43,27 @@ public:
 	/*获得刚度*/
 	inline double EAoverL(const double& L) const
 	{
-		return this->A() * this->E() / L;
+		return this->A_ * this->E_ / L;
 	}
 	inline double GJoverL(const double& L) const
 	{
-		return this->G() * this->Jx() / L;
+		return this->G_ * this->Jx_ / L;
 	}
 	inline double EIzoverL(const double& L, const int& factor) const
 	{
-		return factor * this->Iz() * this->E() / L;
+		return factor * this->Iz_ * this->E_ / L;
 	}
 	inline double EIyoverL(const double& L, const int& factor) const
 	{
-		return factor * this->Iy() * this->E() / L;
+		return factor * this->Iy_ * this->E_ / L;
 	}
-
-private:
-	double A(void) const;
-	double Iy(void) const;
-	double Iz(void) const;
-	double E(void) const;
-	double Jx(void) const;
-	double G(void) const;
 
 private:
 	//纤维截面初始化
 	bool iniSection(const int& section_type, const std::vector<double> dimension_vec,
 		AutoMesh::SectionType& matType, const double& bar_fy, bool isbeam);
+	//设定截面基本参数
+	void SetSectionBaicsInfo();
 
 public:
 	//设定轴向约束刚度
@@ -143,6 +137,14 @@ private:
 	std::vector<int> as_vec_;
 	//是否考虑双偏压
 	bool consider_double_bending = true ;
+
+private:
+	double A_;
+	double Iy_;
+	double Iz_;
+	double E_;
+	double G_;
+	double Jx_;
 
 private:
 	static Vector s;

@@ -87,6 +87,11 @@ public:
           this->dalr_sp->setARK(ark);
           this->dalr_sp->setFactor(factor);
       }
+     //不杀死单元
+      inline void NotKill()
+      {
+          this->needToKill = false;
+      }
     //设定剪跨比
      void setLammda(const double& Lammda);
      //设定承载力
@@ -152,6 +157,9 @@ public:
       double updateDeformationFactor = 0.5;
       //更新剪跨比 轴压系数的承载力边界
       double updateForceFactor = 0.5;
+
+  private:
+      bool needToKill = true;
 
   private: /*力学参数*/
       //剪跨比（需要revert）
